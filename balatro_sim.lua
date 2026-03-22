@@ -1,3 +1,5 @@
+
+
 --[[
     balatro_sim.lua — Headless Balatro Simulation Engine v3
 
@@ -25,7 +27,11 @@
 
 local Sim = {}
 
+
+
 -- ============================================================================
+
+
 --  SECTION 1 — ENUMS
 -- ============================================================================
 
@@ -98,9 +104,13 @@ Sim.HAND_BASE = {
     [4]={8,100,4,40},  [5]={7,60,3,30},   [6]={4,40,2,25},
     [7]={4,35,2,15},   [8]={4,30,3,30},   [9]={3,30,2,20},
     [10]={2,20,1,20},  [11]={2,10,1,15},  [12]={1,5,1,10},
+
+
 }
 
 -- ============================================================================
+
+
 --  SECTION 2 — DETERMINISTIC RNG (LCG)
 -- ============================================================================
 
@@ -126,11 +136,15 @@ function Sim.RNG.shuffle(r, t)
         local j = 1 + math.floor(Sim.RNG.next(r) * i)
         t[i], t[j] = t[j], t[i]
     end
+
+
     return t
 end
 function Sim.RNG.pick(r, t) return t[Sim.RNG.int(r, 1, #t)] end
 
 -- ============================================================================
+
+
 --  SECTION 3 — CARD CONSTRUCTOR
 -- ============================================================================
 
@@ -154,6 +168,8 @@ function Sim.Card.str(card)
     if card.enhancement == 1 then t = t.."+30" end
     if card.enhancement == 4 then t = t.."x2" end
     if card.enhancement == 6 then t = t.."." end
+
+
     if card.edition == 1 then t = t.."[F]" end
     if card.edition == 2 then t = t.."[H]" end
     if card.edition == 3 then t = t.."[P]" end
@@ -161,6 +177,8 @@ function Sim.Card.str(card)
 end
 
 -- ============================================================================
+
+
 --  SECTION 4 — JOKER DEFINITIONS
 -- ============================================================================
 
@@ -316,6 +334,8 @@ end)
 _reg_joker("j_sly", "Sly Joker", 1, 3, function(ctx, st, jk)
     if ctx.joker_main then
         return { chip_mod = 50 }
+
+
     end
 end)
 
@@ -325,6 +345,8 @@ for _, def in pairs(Sim.JOKER_DEFS) do
 end
 
 -- ============================================================================
+
+
 --  SECTION 5 — CONSUMABLE DEFINITIONS
 -- ============================================================================
 
@@ -405,6 +427,8 @@ end)
 
 _reg_joker("j_hiker", "Hiker", 1, 5, function(ctx, st, jk)
     if ctx.individual and ctx.cardarea == "play" then
+
+
         ctx.other_card.perma_bonus = (ctx.other_card.perma_bonus or 0) + 4
         return { chips = 0, message = "+4 permanent" }
     end
@@ -416,6 +440,8 @@ for _, def in pairs(Sim.JOKER_DEFS) do
 end
 
 -- ============================================================================
+
+
 --  SECTION 7 — POKER HAND EVALUATOR
 -- ============================================================================
 
@@ -559,6 +585,8 @@ function Sim.Eval.get_hand(cards)
         local tp = {}
         for _,c in ipairs(_2[1]) do tp[#tp+1]=c end
         for _,c in ipairs(_2[2]) do tp[#tp+1]=c end
+
+
         all[HT.TWO_PAIR] = tp
         if HT.TWO_PAIR < best then best = HT.TWO_PAIR; best_sc = tp end
         if not all[HT.PAIR] then all[HT.PAIR] = _2[1] end
@@ -572,6 +600,8 @@ function Sim.Eval.get_hand(cards)
 end
 
 -- ============================================================================
+
+
 --  SECTION 6 — SCORING ENGINE
 -- ============================================================================
 
@@ -641,6 +671,8 @@ function Sim.Engine.calculate(state, played)
                 }
                 local fx = def.apply(ctx, state, jk)
                 if fx then
+
+
                     if fx.chip_mod then chips = chips + fx.chip_mod end
                     if fx.mult_mod then mult = mult + fx.mult_mod end
                     if fx.Xmult_mod then mult = mult * fx.Xmult_mod end
@@ -656,6 +688,8 @@ function Sim.Engine.calculate(state, played)
 end
 
 -- ============================================================================
+
+
 --  SECTION 7 — GAME STATE
 -- ============================================================================
 
@@ -718,6 +752,8 @@ function Sim.State.add_joker(state, joker_def)
     if #state.jokers >= state.joker_slots then return false end
     state._joker_n = state._joker_n + 1
     state.jokers[#state.jokers+1] = {
+
+
         id = joker_def.id, edition = 0, eternal = false,
         uid = state._joker_n,
     }
@@ -735,6 +771,8 @@ function Sim.State.remove_joker(state, uid)
 end
 
 -- ============================================================================
+
+
 --  SECTION 8 — BLIND SYSTEM
 -- ============================================================================
 
@@ -832,6 +870,8 @@ function Sim.Blind.setup(state, btype)
 end
 
 -- Return the next blind type to fight: 1=Small, 2=Big, 3=Boss
+
+
 function Sim.Blind.next_type(state)
     local st = state._blind_states
     if not st then return 1 end
@@ -851,6 +891,8 @@ function Sim.Blind.mark_done(state, btype, skipped)
 end
 
 -- ============================================================================
+
+
 --  SECTION 9 — SHOP & ECONOMY
 -- ============================================================================
 
@@ -942,6 +984,8 @@ function Sim.Shop.buy_booster(state)
 end
 
 function Sim.Shop.select_pack(state, idx)
+
+
     if not state.pack_cards or not state.pack_cards[idx] then return false end
     local jid = state.pack_cards[idx]
     local def = Sim._JOKER_BY_ID[jid]
@@ -963,6 +1007,8 @@ function Sim.Shop.skip_pack(state)
 end
 
 -- ============================================================================
+
+
 --  SECTION 10 — OBSERVATION ENCODING
 -- ============================================================================
 
@@ -1082,6 +1128,8 @@ function Sim.Obs.encode(state)
         o[n+3] = state.shop.booster and 1.0 or 0.0
         o[n+4] = state.shop.consumable and 1.0 or 0.0
     else
+
+
         o[n+1] = 0; o[n+2] = 0; o[n+3] = 0; o[n+4] = 0
     end
     n = n + 4
@@ -1105,6 +1153,8 @@ function Sim.Obs.encode(state)
 end
 
 -- ============================================================================
+
+
 --  SECTION 11 — ENVIRONMENT (Gym-style Interface)
 -- ============================================================================
 
@@ -1452,6 +1502,8 @@ end
 -- Main step function
 -- ============================================================
 
+
+
 function Sim.Env.step(state, atype, value)
     local E = Sim.ENUMS
 
@@ -1476,6 +1528,8 @@ function Sim.Env.step(state, atype, value)
 end
 
 -- ============================================================================
+
+
 --  SECTION 12 — SELF-TEST & RANDOM AGENT
 -- ============================================================================
 
