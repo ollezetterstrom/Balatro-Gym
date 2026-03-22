@@ -242,6 +242,83 @@ _reg_joker("j_burnt_joker", "Burnt Joker", 3, 8, function(ctx, st, jk)
     end
 end)
 
+-- === New jokers (10 common/uncommon) ===
+
+_reg_joker("j_stencil", "Joker Stencil", 2, 8, function(ctx, st, jk)
+    if ctx.joker_main then
+        local empty = st.joker_slots - #st.jokers
+        if empty > 0 then return { Xmult_mod = 1 + empty } end
+    end
+end)
+
+_reg_joker("j_banner", "Banner", 1, 5, function(ctx, st, jk)
+    if ctx.joker_main then
+        return { chip_mod = 30 * (st.discards_left or 0) }
+    end
+end)
+
+_reg_joker("j_mystic_summit", "Mystic Summit", 1, 5, function(ctx, st, jk)
+    if ctx.joker_main and (st.discards_left or 0) == 0 then
+        return { mult_mod = 15 }
+    end
+end)
+
+_reg_joker("j_misprint", "Misprint", 1, 4, function(ctx, st, jk)
+    if ctx.joker_main then
+        return { mult_mod = Sim.RNG.int(st.rng, 0, 23) }
+    end
+end)
+
+_reg_joker("j_fibonacci", "Fibonacci", 2, 8, function(ctx, st, jk)
+    if ctx.individual and ctx.other_card then
+        local r = ctx.other_card.rank
+        if r == 14 or r == 2 or r == 3 or r == 5 or r == 8 then
+            return { mult = 8 }
+        end
+    end
+end)
+
+_reg_joker("j_scary_face", "Scary Face", 1, 4, function(ctx, st, jk)
+    if ctx.individual and ctx.other_card then
+        local r = ctx.other_card.rank
+        if r == 11 or r == 12 or r == 13 then
+            return { chips = 30 }
+        end
+    end
+end)
+
+_reg_joker("j_even_steven", "Even Steven", 1, 5, function(ctx, st, jk)
+    if ctx.individual and ctx.other_card then
+        local r = ctx.other_card.rank
+        if r == 2 or r == 4 or r == 6 or r == 8 or r == 10 then
+            return { mult = 4 }
+        end
+    end
+end)
+
+_reg_joker("j_odd_todd", "Odd Todd", 1, 5, function(ctx, st, jk)
+    if ctx.individual and ctx.other_card then
+        local r = ctx.other_card.rank
+        if r == 3 or r == 5 or r == 7 or r == 9 or r == 14 then
+            return { chips = 31 }
+        end
+    end
+end)
+
+_reg_joker("j_scholar", "Scholar", 1, 4, function(ctx, st, jk)
+    if ctx.individual and ctx.other_card then
+        if ctx.other_card.rank == 14 then
+            return { chips = 20, mult = 4 }
+        end
+    end
+end)
+
+_reg_joker("j_sly", "Sly Joker", 1, 3, function(ctx, st, jk)
+    if ctx.joker_main then
+        return { chip_mod = 50 }
+    end
+end)
+
 Sim.JOKER_POOL = {}
 for _, def in pairs(Sim.JOKER_DEFS) do
     Sim.JOKER_POOL[#Sim.JOKER_POOL + 1] = def.id
@@ -515,21 +592,23 @@ function Sim.Engine.calculate(state, played)
     for i = 1, #played do
         local c = played[i]
         local insc = is_sc[c]
-        if insc and c.enhancement ~= 6 then chips = chips + Sim.Card.chips(c) end
-        if insc then
+        local debuffed = Sim.Blind.is_card_debuffed(state, c)
+
+        if insc and not debuffed and c.enhancement ~= 6 then chips = chips + Sim.Card.chips(c) end
+        if insc and not debuffed then
             if c.enhancement == 1 then chips = chips + 30        -- Bonus
             elseif c.enhancement == 2 then mult = mult + 4       -- Mult
             elseif c.enhancement == 6 then chips = chips + 50    -- Stone
             elseif c.enhancement == 4 then mult = mult * 2 end   -- Glass
         end
-        if insc then
+        if insc and not debuffed then
             if c.edition == 1 then chips = chips + 50            -- Foil
             elseif c.edition == 2 then mult = mult + 10          -- Holo
             elseif c.edition == 3 then mult = mult * 1.5 end     -- Poly
         end
 
         -- Individual card joker effects (Hiker, etc.)
-        if insc and state.jokers then
+        if insc and not debuffed and state.jokers then
             for ji = 1, #state.jokers do
                 local jk = state.jokers[ji]
                 local def = Sim._JOKER_BY_ID[jk.id]
@@ -666,6 +745,53 @@ local BLIND_DATA = {
     {name="Boss",  mult=2.0, reward=5},
 }
 
+-- Boss blind pool (name, chip_mult_override, setup_fn)
+-- setup_fn(state) runs when the boss is set, applies debuffs/penalties
+Sim.BOSS_BLINDS = {
+    { name = "The Wall",     chip_mult = 2.0, setup = function(st) end },
+    { name = "The Arm",      chip_mult = 1.0, setup = function(st) end },
+    { name = "The Water",    chip_mult = 1.0, setup = function(st) st.discards_left = 0 end },
+    { name = "The Manacle",  chip_mult = 1.0, setup = function(st) st.hand_limit = st.hand_limit - 1 end },
+    { name = "The Needle",   chip_mult = 1.0, setup = function(st) st.hands_left = 1 end },
+    { name = "The Club",     chip_mult = 1.0, setup = function(st) st._boss_debuff_suit = 3 end },
+    { name = "The Goad",     chip_mult = 1.0, setup = function(st) st._boss_debuff_suit = 1 end },
+    { name = "The Window",   chip_mult = 1.0, setup = function(st) st._boss_debuff_suit = 4 end },
+}
+
+function Sim.Blind.pick_boss(state, ante)
+    -- Pick a deterministic boss from the pool based on ante + rng
+    local idx = Sim.RNG.int(state.rng, 1, #Sim.BOSS_BLINDS)
+    return Sim.BOSS_BLINDS[idx]
+end
+
+function Sim.Blind.is_card_debuffed(state, card)
+    if not state._boss_debuff_suit then return false end
+    return card.suit == state._boss_debuff_suit
+end
+
+function Sim.Blind.on_play(state, played_cards)
+    -- Boss: The Arm — decrease played hand level by 1
+    if state.boss_name == "The Arm" then
+        local ht = Sim.Eval.get_hand(played_cards)
+        if state.hand_levels[ht] and state.hand_levels[ht] > 1 then
+            state.hand_levels[ht] = state.hand_levels[ht] - 1
+        end
+    end
+end
+
+function Sim.Blind.on_after_play(state)
+    -- Boss: The Hook — discard 2 random cards from hand
+    if state.boss_name == "The Hook" and #state.hand >= 2 then
+        local idx1 = Sim.RNG.int(state.rng, 1, #state.hand)
+        local idx2 = Sim.RNG.int(state.rng, 1, #state.hand - 1)
+        if idx2 >= idx1 then idx2 = idx2 + 1 end
+        local c1 = table.remove(state.hand, math.max(idx1, idx2))
+        local c2 = table.remove(state.hand, math.min(idx1, idx2))
+        if c1 then state.discard[#state.discard+1] = c1 end
+        if c2 then state.discard[#state.discard+1] = c2 end
+    end
+end
+
 function Sim.Blind.chips(ante, btype)
     local amounts = {300,800,2000,5000,11000,20000,35000,50000}
     local base = ante <= 8 and amounts[ante] or amounts[8]
@@ -675,6 +801,11 @@ function Sim.Blind.name(btype) return BLIND_DATA[btype].name end
 function Sim.Blind.reward(btype) return BLIND_DATA[btype].reward end
 
 function Sim.Blind.setup(state, btype)
+    -- Restore defaults (boss effects from previous round are cleared)
+    state.hand_limit = D.hand_size
+    state._boss_debuff_suit = nil
+    state.boss_name = nil
+
     state.blind_type = BLIND_DATA[btype].name
     state.blind_chips = Sim.Blind.chips(state.ante, btype)
     state.blind_beaten = false
@@ -684,6 +815,17 @@ function Sim.Blind.setup(state, btype)
     state.hands_played = 0
     state.round = state.round + 1
     state.selection = {}
+
+    -- Boss blind: pick specific boss and apply effects
+    if btype == 3 then
+        local boss = Sim.Blind.pick_boss(state, state.ante)
+        state.boss_name = boss.name
+        if boss.chip_mult and boss.chip_mult ~= 1.0 then
+            state.blind_chips = math.floor(state.blind_chips * boss.chip_mult)
+        end
+        boss.setup(state)
+    end
+
     Sim.State.rebuild_deck(state)
     Sim.State.draw(state)
     return state
@@ -1079,6 +1221,9 @@ local function _step_selecting(state, atype, value)
                 table.remove(state.hand, idx)
             end
 
+            -- Boss: The Arm (decrease hand level before scoring)
+            Sim.Blind.on_play(state, played)
+
             local total, chips, mult, ht, scoring, all_h =
                 Sim.Engine.calculate(state, played)
 
@@ -1089,6 +1234,9 @@ local function _step_selecting(state, atype, value)
             for _, c in ipairs(played) do state.discard[#state.discard+1] = c end
             Sim.State.draw(state)
             state.selection = {}
+
+            -- Boss: The Hook (discard 2 random cards after playing)
+            Sim.Blind.on_after_play(state)
 
             -- Joker "play" triggers
             if state.jokers then
@@ -1408,7 +1556,7 @@ if not pcall(debug.getlocal, 4, 1) then
     test("REORDER swaps jokers", rs.jokers[1].id == id_before_2 and rs.jokers[2].id == id_before_1)
 
     -- Test: Hiker gives permanent chips
-    local hs = Sim.State.new({ seed="HIK", jokers={{id=11, edition=0, eternal=false, uid=1}} })
+    local hs = Sim.State.new({ seed="HIK", jokers={{id=21, edition=0, eternal=false, uid=1}} })
     hs.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     local pb_before = hs.hand[1].perma_bonus
     Sim.Engine.calculate(hs, {hs.hand[1], hs.hand[2]})
