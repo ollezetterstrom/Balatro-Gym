@@ -1,11 +1,6 @@
 -- src/02_rng.lua — Deterministic LCG
 -- Auto-split. Edit freely.
 
-}
-
--- ============================================================================
-
-
 --  SECTION 2 — DETERMINISTIC RNG (LCG)
 -- ============================================================================
 
@@ -31,3 +26,12 @@ function Sim.RNG.shuffle(r, t)
         local j = 1 + math.floor(Sim.RNG.next(r) * i)
         t[i], t[j] = t[j], t[i]
     end
+
+
+    return t
+end
+function Sim.RNG.pick(r, t) return t[Sim.RNG.int(r, 1, #t)] end
+
+-- ============================================================================
+
+

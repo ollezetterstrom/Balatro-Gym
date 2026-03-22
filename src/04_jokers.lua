@@ -1,22 +1,13 @@
 -- src/04_jokers.lua — Joker definitions (all)
 -- Auto-split. Edit freely.
 
-    if card.edition == 1 then t = t.."[F]" end
-    if card.edition == 2 then t = t.."[H]" end
-    if card.edition == 3 then t = t.."[P]" end
-    return t
-end
-
--- ============================================================================
-
-
 --  SECTION 4 — JOKER DEFINITIONS
 -- ============================================================================
 
 Sim.JOKER_DEFS = {}
 Sim._JOKER_BY_ID = {}
 
-local function _reg_joker(key, name, rarity, cost, apply_fn)
+function _reg_joker(key, name, rarity, cost, apply_fn)
     local def = { id = #Sim._JOKER_BY_ID + 1, key = key, name = name,
                   rarity = rarity, cost = cost, apply = apply_fn }
     Sim.JOKER_DEFS[key] = def
@@ -165,3 +156,16 @@ end)
 _reg_joker("j_sly", "Sly Joker", 1, 3, function(ctx, st, jk)
     if ctx.joker_main then
         return { chip_mod = 50 }
+
+
+    end
+end)
+
+Sim.JOKER_POOL = {}
+for _, def in pairs(Sim.JOKER_DEFS) do
+    Sim.JOKER_POOL[#Sim.JOKER_POOL + 1] = def.id
+end
+
+-- ============================================================================
+
+

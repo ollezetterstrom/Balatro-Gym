@@ -1,19 +1,6 @@
 -- src/06_evaluator.lua — Poker hand evaluator
 -- Auto-split. Edit freely.
 
-        ctx.other_card.perma_bonus = (ctx.other_card.perma_bonus or 0) + 4
-        return { chips = 0, message = "+4 permanent" }
-    end
-end)
-
-Sim.JOKER_POOL = {}
-for _, def in pairs(Sim.JOKER_DEFS) do
-    Sim.JOKER_POOL[#Sim.JOKER_POOL + 1] = def.id
-end
-
--- ============================================================================
-
-
 --  SECTION 7 — POKER HAND EVALUATOR
 -- ============================================================================
 
@@ -157,3 +144,20 @@ function Sim.Eval.get_hand(cards)
         local tp = {}
         for _,c in ipairs(_2[1]) do tp[#tp+1]=c end
         for _,c in ipairs(_2[2]) do tp[#tp+1]=c end
+
+
+        all[HT.TWO_PAIR] = tp
+        if HT.TWO_PAIR < best then best = HT.TWO_PAIR; best_sc = tp end
+        if not all[HT.PAIR] then all[HT.PAIR] = _2[1] end
+    end
+    if #_2 > 0 then
+        all[HT.PAIR] = _2[1]
+        if HT.PAIR < best then best = HT.PAIR; best_sc = _2[1] end
+    end
+    all[HT.HIGH_CARD] = _hi
+    return best, best_sc, all
+end
+
+-- ============================================================================
+
+

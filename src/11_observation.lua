@@ -1,29 +1,6 @@
 -- src/11_observation.lua — Observation encoder
 -- Auto-split. Edit freely.
 
-    if not state.pack_cards or not state.pack_cards[idx] then return false end
-    local jid = state.pack_cards[idx]
-    local def = Sim._JOKER_BY_ID[jid]
-    if not def then return false end
-    if #state.jokers < state.joker_slots then
-        Sim.State.add_joker(state, def)
-    end
-    state.pack_cards = nil
-    state.phase = state._prev_phase or Sim.ENUMS.PHASE.SHOP
-    state._prev_phase = nil
-    return true
-end
-
-function Sim.Shop.skip_pack(state)
-    state.pack_cards = nil
-    state.phase = state._prev_phase or Sim.ENUMS.PHASE.SHOP
-    state._prev_phase = nil
-    return true
-end
-
--- ============================================================================
-
-
 --  SECTION 10 — OBSERVATION ENCODING
 -- ============================================================================
 
@@ -143,3 +120,30 @@ function Sim.Obs.encode(state)
         o[n+3] = state.shop.booster and 1.0 or 0.0
         o[n+4] = state.shop.consumable and 1.0 or 0.0
     else
+
+
+        o[n+1] = 0; o[n+2] = 0; o[n+3] = 0; o[n+4] = 0
+    end
+    n = n + 4
+
+    -- Joker count / 5
+    o[n+1] = #state.jokers / 5.0
+    n = n + 1
+
+    -- Consumable count / 2
+    o[n+1] = #state.consumables / 2.0
+    n = n + 1
+
+    -- Round dollars earned so far (normalized)
+    o[n+1] = math.min((state.round_dollars or 0) / 25.0, 1.0)
+    n = n + 1
+
+    -- Spare to fill to 129
+    while n < 129 do n = n + 1; o[n] = 0 end
+
+    return o
+end
+
+-- ============================================================================
+
+

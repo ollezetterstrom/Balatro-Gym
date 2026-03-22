@@ -1,27 +1,6 @@
 -- src/10_shop.lua — Shop, economy, packs
 -- Auto-split. Edit freely.
 
-function Sim.Blind.next_type(state)
-    local st = state._blind_states
-    if not st then return 1 end
-    if st.Small ~= "done" then return 1 end
-    if st.Big ~= "done" then return 2 end
-    if st.Boss ~= "done" then return 3 end
-    return nil
-end
-
-function Sim.Blind.init_ante(state)
-    state._blind_states = {Small="pending", Big="pending", Boss="pending"}
-end
-
-function Sim.Blind.mark_done(state, btype, skipped)
-    local names = {"Small","Big","Boss"}
-    state._blind_states[names[btype]] = skipped and "skipped" or "done"
-end
-
--- ============================================================================
-
-
 --  SECTION 9 — SHOP & ECONOMY
 -- ============================================================================
 
@@ -113,3 +92,28 @@ function Sim.Shop.buy_booster(state)
 end
 
 function Sim.Shop.select_pack(state, idx)
+
+
+    if not state.pack_cards or not state.pack_cards[idx] then return false end
+    local jid = state.pack_cards[idx]
+    local def = Sim._JOKER_BY_ID[jid]
+    if not def then return false end
+    if #state.jokers < state.joker_slots then
+        Sim.State.add_joker(state, def)
+    end
+    state.pack_cards = nil
+    state.phase = state._prev_phase or Sim.ENUMS.PHASE.SHOP
+    state._prev_phase = nil
+    return true
+end
+
+function Sim.Shop.skip_pack(state)
+    state.pack_cards = nil
+    state.phase = state._prev_phase or Sim.ENUMS.PHASE.SHOP
+    state._prev_phase = nil
+    return true
+end
+
+-- ============================================================================
+
+

@@ -1,28 +1,11 @@
 -- src/08_state.lua — Game state, draw, discard, joker ops
 -- Auto-split. Edit freely.
 
-                    if fx.chip_mod then chips = chips + fx.chip_mod end
-                    if fx.mult_mod then mult = mult + fx.mult_mod end
-                    if fx.Xmult_mod then mult = mult * fx.Xmult_mod end
-                end
-            end
-            if jk.edition == 1 then chips = chips + 50
-            elseif jk.edition == 2 then mult = mult + 10
-            elseif jk.edition == 3 then mult = mult * 1.5 end
-        end
-    end
-
-    return math.floor(chips * mult), chips, mult, hand_type, scoring, all_hands
-end
-
--- ============================================================================
-
-
 --  SECTION 7 — GAME STATE
 -- ============================================================================
 
 Sim.State = {}
-local D = { hands=4, discards=4, hand_size=8, joker_slots=5, cons_slots=2, start_money=4 }
+D = { hands=4, discards=4, hand_size=8, joker_slots=5, cons_slots=2, start_money=4 }
 
 function Sim.State.new(opts)
     opts = opts or {}
@@ -80,3 +63,24 @@ function Sim.State.add_joker(state, joker_def)
     if #state.jokers >= state.joker_slots then return false end
     state._joker_n = state._joker_n + 1
     state.jokers[#state.jokers+1] = {
+
+
+        id = joker_def.id, edition = 0, eternal = false,
+        uid = state._joker_n,
+    }
+    return true
+end
+
+function Sim.State.remove_joker(state, uid)
+    for i = #state.jokers, 1, -1 do
+        if state.jokers[i].uid == uid then
+            table.remove(state.jokers, i)
+            return true
+        end
+    end
+    return false
+end
+
+-- ============================================================================
+
+

@@ -1,13 +1,6 @@
 -- src/03_cards.lua — Card constructor, deck, chips
 -- Auto-split. Edit freely.
 
-    return t
-end
-function Sim.RNG.pick(r, t) return t[Sim.RNG.int(r, 1, #t)] end
-
--- ============================================================================
-
-
 --  SECTION 3 — CARD CONSTRUCTOR
 -- ============================================================================
 
@@ -31,3 +24,14 @@ function Sim.Card.str(card)
     if card.enhancement == 1 then t = t.."+30" end
     if card.enhancement == 4 then t = t.."x2" end
     if card.enhancement == 6 then t = t.."." end
+
+
+    if card.edition == 1 then t = t.."[F]" end
+    if card.edition == 2 then t = t.."[H]" end
+    if card.edition == 3 then t = t.."[P]" end
+    return t
+end
+
+-- ============================================================================
+
+

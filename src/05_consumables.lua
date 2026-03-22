@@ -1,24 +1,13 @@
 -- src/05_consumables.lua — Consumables, pool, advanced jokers
 -- Auto-split. Edit freely.
 
-    end
-end)
-
-Sim.JOKER_POOL = {}
-for _, def in pairs(Sim.JOKER_DEFS) do
-    Sim.JOKER_POOL[#Sim.JOKER_POOL + 1] = def.id
-end
-
--- ============================================================================
-
-
 --  SECTION 5 — CONSUMABLE DEFINITIONS
 -- ============================================================================
 
 Sim.CONSUMABLE_DEFS = {}
 Sim._CONS_BY_ID = {}
 
-local function _reg_cons(key, name, set, effect_fn)
+function _reg_cons(key, name, set, effect_fn)
     local def = { id = #Sim._CONS_BY_ID + 1, key = key, name = name,
                   set = set, effect = effect_fn }
     Sim.CONSUMABLE_DEFS[key] = def
@@ -92,3 +81,18 @@ end)
 
 _reg_joker("j_hiker", "Hiker", 1, 5, function(ctx, st, jk)
     if ctx.individual and ctx.cardarea == "play" then
+
+
+        ctx.other_card.perma_bonus = (ctx.other_card.perma_bonus or 0) + 4
+        return { chips = 0, message = "+4 permanent" }
+    end
+end)
+
+Sim.JOKER_POOL = {}
+for _, def in pairs(Sim.JOKER_DEFS) do
+    Sim.JOKER_POOL[#Sim.JOKER_POOL + 1] = def.id
+end
+
+-- ============================================================================
+
+

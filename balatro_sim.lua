@@ -1,5 +1,6 @@
 
 
+
 --[[
     balatro_sim.lua — Headless Balatro Simulation Engine v3
 
@@ -25,11 +26,13 @@
         [131..124] shop flags, counts, spare
 ]]
 
-local Sim = {}
+Sim = Sim or {}
 
 
 
 -- ============================================================================
+
+
 
 
 --  SECTION 1 — ENUMS
@@ -111,6 +114,8 @@ Sim.HAND_BASE = {
 -- ============================================================================
 
 
+
+
 --  SECTION 2 — DETERMINISTIC RNG (LCG)
 -- ============================================================================
 
@@ -143,6 +148,8 @@ end
 function Sim.RNG.pick(r, t) return t[Sim.RNG.int(r, 1, #t)] end
 
 -- ============================================================================
+
+
 
 
 --  SECTION 3 — CARD CONSTRUCTOR
@@ -179,13 +186,15 @@ end
 -- ============================================================================
 
 
+
+
 --  SECTION 4 — JOKER DEFINITIONS
 -- ============================================================================
 
 Sim.JOKER_DEFS = {}
 Sim._JOKER_BY_ID = {}
 
-local function _reg_joker(key, name, rarity, cost, apply_fn)
+function _reg_joker(key, name, rarity, cost, apply_fn)
     local def = { id = #Sim._JOKER_BY_ID + 1, key = key, name = name,
                   rarity = rarity, cost = cost, apply = apply_fn }
     Sim.JOKER_DEFS[key] = def
@@ -347,13 +356,15 @@ end
 -- ============================================================================
 
 
+
+
 --  SECTION 5 — CONSUMABLE DEFINITIONS
 -- ============================================================================
 
 Sim.CONSUMABLE_DEFS = {}
 Sim._CONS_BY_ID = {}
 
-local function _reg_cons(key, name, set, effect_fn)
+function _reg_cons(key, name, set, effect_fn)
     local def = { id = #Sim._CONS_BY_ID + 1, key = key, name = name,
                   set = set, effect = effect_fn }
     Sim.CONSUMABLE_DEFS[key] = def
@@ -440,6 +451,8 @@ for _, def in pairs(Sim.JOKER_DEFS) do
 end
 
 -- ============================================================================
+
+
 
 
 --  SECTION 7 — POKER HAND EVALUATOR
@@ -602,6 +615,8 @@ end
 -- ============================================================================
 
 
+
+
 --  SECTION 6 — SCORING ENGINE
 -- ============================================================================
 
@@ -690,11 +705,13 @@ end
 -- ============================================================================
 
 
+
+
 --  SECTION 7 — GAME STATE
 -- ============================================================================
 
 Sim.State = {}
-local D = { hands=4, discards=4, hand_size=8, joker_slots=5, cons_slots=2, start_money=4 }
+D = { hands=4, discards=4, hand_size=8, joker_slots=5, cons_slots=2, start_money=4 }
 
 function Sim.State.new(opts)
     opts = opts or {}
@@ -771,6 +788,8 @@ function Sim.State.remove_joker(state, uid)
 end
 
 -- ============================================================================
+
+
 
 
 --  SECTION 8 — BLIND SYSTEM
@@ -893,6 +912,8 @@ end
 -- ============================================================================
 
 
+
+
 --  SECTION 9 — SHOP & ECONOMY
 -- ============================================================================
 
@@ -1007,6 +1028,8 @@ function Sim.Shop.skip_pack(state)
 end
 
 -- ============================================================================
+
+
 
 
 --  SECTION 10 — OBSERVATION ENCODING
@@ -1153,6 +1176,8 @@ function Sim.Obs.encode(state)
 end
 
 -- ============================================================================
+
+
 
 
 --  SECTION 11 — ENVIRONMENT (Gym-style Interface)
@@ -1530,10 +1555,12 @@ end
 -- ============================================================================
 
 
+
+
 --  SECTION 12 — SELF-TEST & RANDOM AGENT
 -- ============================================================================
 
-if not pcall(debug.getlocal, 4, 1) then
+if _SIM_RUN_TESTS or not pcall(debug.getlocal, 4, 1) then
     local E = Sim.ENUMS
     local C = Sim.Card.new
     local passed, total = 0, 0

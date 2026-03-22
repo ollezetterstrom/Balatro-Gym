@@ -2,6 +2,7 @@
 -- Auto-split. Edit freely.
 
 
+
 --[[
     balatro_sim.lua — Headless Balatro Simulation Engine v3
 
@@ -27,5 +28,10 @@
         [131..124] shop flags, counts, spare
 ]]
 
-local Sim = {}
+Sim = Sim or {}
+
+
+
+-- ============================================================================
+
 

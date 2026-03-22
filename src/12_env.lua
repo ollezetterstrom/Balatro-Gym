@@ -1,31 +1,6 @@
 -- src/12_env.lua — Gymnasium env (reset/step/handlers)
 -- Auto-split. Edit freely.
 
-        o[n+1] = 0; o[n+2] = 0; o[n+3] = 0; o[n+4] = 0
-    end
-    n = n + 4
-
-    -- Joker count / 5
-    o[n+1] = #state.jokers / 5.0
-    n = n + 1
-
-    -- Consumable count / 2
-    o[n+1] = #state.consumables / 2.0
-    n = n + 1
-
-    -- Round dollars earned so far (normalized)
-    o[n+1] = math.min((state.round_dollars or 0) / 25.0, 1.0)
-    n = n + 1
-
-    -- Spare to fill to 129
-    while n < 129 do n = n + 1; o[n] = 0 end
-
-    return o
-end
-
--- ============================================================================
-
-
 --  SECTION 11 — ENVIRONMENT (Gym-style Interface)
 -- ============================================================================
 
@@ -372,3 +347,32 @@ end
 -- ============================================================
 -- Main step function
 -- ============================================================
+
+
+
+function Sim.Env.step(state, atype, value)
+    local E = Sim.ENUMS
+
+    if state.phase == E.PHASE.SELECTING_HAND then
+        return _step_selecting(state, atype, value)
+    elseif state.phase == E.PHASE.SHOP then
+        return _step_shop(state, atype, value)
+    elseif state.phase == E.PHASE.PACK_OPEN then
+        return _step_pack(state, atype, value)
+    elseif state.phase == E.PHASE.BLIND_SELECT then
+        -- Auto-start next blind
+        local next_btype = Sim.Blind.next_type(state)
+        if next_btype then
+            Sim.Blind.setup(state, next_btype)
+            state.phase = E.PHASE.SELECTING_HAND
+        end
+        return Sim.Obs.encode(state), 0, state.phase == E.PHASE.WIN
+    end
+
+    -- GAME_OVER or WIN
+    return Sim.Obs.encode(state), 0, true
+end
+
+-- ============================================================================
+
+

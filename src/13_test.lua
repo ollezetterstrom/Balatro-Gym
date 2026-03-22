@@ -1,37 +1,10 @@
 -- src/13_test.lua — Self-tests, random agent, return Sim
 -- Auto-split. Edit freely.
 
-
-function Sim.Env.step(state, atype, value)
-    local E = Sim.ENUMS
-
-    if state.phase == E.PHASE.SELECTING_HAND then
-        return _step_selecting(state, atype, value)
-    elseif state.phase == E.PHASE.SHOP then
-        return _step_shop(state, atype, value)
-    elseif state.phase == E.PHASE.PACK_OPEN then
-        return _step_pack(state, atype, value)
-    elseif state.phase == E.PHASE.BLIND_SELECT then
-        -- Auto-start next blind
-        local next_btype = Sim.Blind.next_type(state)
-        if next_btype then
-            Sim.Blind.setup(state, next_btype)
-            state.phase = E.PHASE.SELECTING_HAND
-        end
-        return Sim.Obs.encode(state), 0, state.phase == E.PHASE.WIN
-    end
-
-    -- GAME_OVER or WIN
-    return Sim.Obs.encode(state), 0, true
-end
-
--- ============================================================================
-
-
 --  SECTION 12 — SELF-TEST & RANDOM AGENT
 -- ============================================================================
 
-if not pcall(debug.getlocal, 4, 1) then
+if _SIM_RUN_TESTS or not pcall(debug.getlocal, 4, 1) then
     local E = Sim.ENUMS
     local C = Sim.Card.new
     local passed, total = 0, 0

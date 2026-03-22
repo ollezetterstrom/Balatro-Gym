@@ -1,25 +1,6 @@
 -- src/09_blinds.lua — Blind system, boss blinds
 -- Auto-split. Edit freely.
 
-        id = joker_def.id, edition = 0, eternal = false,
-        uid = state._joker_n,
-    }
-    return true
-end
-
-function Sim.State.remove_joker(state, uid)
-    for i = #state.jokers, 1, -1 do
-        if state.jokers[i].uid == uid then
-            table.remove(state.jokers, i)
-            return true
-        end
-    end
-    return false
-end
-
--- ============================================================================
-
-
 --  SECTION 8 — BLIND SYSTEM
 -- ============================================================================
 
@@ -117,3 +98,26 @@ function Sim.Blind.setup(state, btype)
 end
 
 -- Return the next blind type to fight: 1=Small, 2=Big, 3=Boss
+
+
+function Sim.Blind.next_type(state)
+    local st = state._blind_states
+    if not st then return 1 end
+    if st.Small ~= "done" then return 1 end
+    if st.Big ~= "done" then return 2 end
+    if st.Boss ~= "done" then return 3 end
+    return nil
+end
+
+function Sim.Blind.init_ante(state)
+    state._blind_states = {Small="pending", Big="pending", Boss="pending"}
+end
+
+function Sim.Blind.mark_done(state, btype, skipped)
+    local names = {"Small","Big","Boss"}
+    state._blind_states[names[btype]] = skipped and "skipped" or "done"
+end
+
+-- ============================================================================
+
+

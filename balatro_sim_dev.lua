@@ -17,6 +17,7 @@ dofile(dir..'src/09_blinds.lua')
 dofile(dir..'src/10_shop.lua')
 dofile(dir..'src/11_observation.lua')
 dofile(dir..'src/12_env.lua')
+_SIM_RUN_TESTS = true
 dofile(dir..'src/13_test.lua')  -- runs tests
 
 return Sim

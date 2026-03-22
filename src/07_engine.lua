@@ -1,21 +1,6 @@
 -- src/07_engine.lua — Scoring engine
 -- Auto-split. Edit freely.
 
-        all[HT.TWO_PAIR] = tp
-        if HT.TWO_PAIR < best then best = HT.TWO_PAIR; best_sc = tp end
-        if not all[HT.PAIR] then all[HT.PAIR] = _2[1] end
-    end
-    if #_2 > 0 then
-        all[HT.PAIR] = _2[1]
-        if HT.PAIR < best then best = HT.PAIR; best_sc = _2[1] end
-    end
-    all[HT.HIGH_CARD] = _hi
-    return best, best_sc, all
-end
-
--- ============================================================================
-
-
 --  SECTION 6 — SCORING ENGINE
 -- ============================================================================
 
@@ -85,3 +70,22 @@ function Sim.Engine.calculate(state, played)
                 }
                 local fx = def.apply(ctx, state, jk)
                 if fx then
+
+
+                    if fx.chip_mod then chips = chips + fx.chip_mod end
+                    if fx.mult_mod then mult = mult + fx.mult_mod end
+                    if fx.Xmult_mod then mult = mult * fx.Xmult_mod end
+                end
+            end
+            if jk.edition == 1 then chips = chips + 50
+            elseif jk.edition == 2 then mult = mult + 10
+            elseif jk.edition == 3 then mult = mult * 1.5 end
+        end
+    end
+
+    return math.floor(chips * mult), chips, mult, hand_type, scoring, all_hands
+end
+
+-- ============================================================================
+
+
