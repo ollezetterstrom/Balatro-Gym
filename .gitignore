@@ -1,0 +1,74 @@
+# =============================================================================
+# BalatroSim — .gitignore
+# Only balatro_sim.lua, README.md, roadmap.md, and docs go in the repo.
+# Everything else is either copyrighted game code or build artifacts.
+# =============================================================================
+
+# --- Balatro game files (copyrighted, DO NOT distribute) ---
+Balatro.exe
+balatro.love
+*.dll
+*.dll.bak
+*.love
+*.exe
+version.jkr
+license.txt
+readme.txt
+luasteam.lua
+steam_appid.txt
+steam_settings/
+
+# --- Decompiled game source (copyrighted reference material) ---
+main.lua
+conf.lua
+globals.lua
+game.lua
+card.lua
+cardarea.lua
+card_character.lua
+blind.lua
+back.lua
+tag.lua
+challenges.lua
+bit.lua
+functions/
+engine/
+localization/
+resources/
+
+# --- OS artifacts ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# --- Lua bytecode ---
+*.luac
+
+# --- Python (future bridge) ---
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# --- Training artifacts ---
+*.pt
+*.pth
+*.onnx
+checkpoints/
+logs/
+runs/
+*.json.gz
