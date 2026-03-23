@@ -66,7 +66,8 @@ function Sim.Engine.calculate(state, played)
                 local ctx = {
                     joker_main = true, hand_type = hand_type,
                     all_hands = all_hands, poker_hands = all_hands,
-                    scoring = scoring, my_joker_index = ji,
+                    scoring = scoring, all_played = played,
+                    my_joker_index = ji,
                 }
                 local fx = def.apply(ctx, state, jk)
                 if fx then

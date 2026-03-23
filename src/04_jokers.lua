@@ -20,32 +20,32 @@ _reg_joker("j_joker", "Joker", 1, 3, function(ctx, st, jk)
 end)
 
 _reg_joker("j_greedy", "Greedy Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.scoring then
-        for _, c in ipairs(ctx.scoring) do
+    if ctx.joker_main and ctx.all_played then
+        for _, c in ipairs(ctx.all_played) do
             if c.suit == 4 then return { mult_mod = 3 } end  -- Diamonds
         end
     end
 end)
 
 _reg_joker("j_lusty", "Lusty Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.scoring then
-        for _, c in ipairs(ctx.scoring) do
+    if ctx.joker_main and ctx.all_played then
+        for _, c in ipairs(ctx.all_played) do
             if c.suit == 2 then return { mult_mod = 3 } end  -- Hearts
         end
     end
 end)
 
 _reg_joker("j_wrathful", "Wrathful Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.scoring then
-        for _, c in ipairs(ctx.scoring) do
+    if ctx.joker_main and ctx.all_played then
+        for _, c in ipairs(ctx.all_played) do
             if c.suit == 1 then return { mult_mod = 3 } end  -- Spades
         end
     end
 end)
 
 _reg_joker("j_gluttonous", "Gluttonous Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.scoring then
-        for _, c in ipairs(ctx.scoring) do
+    if ctx.joker_main and ctx.all_played then
+        for _, c in ipairs(ctx.all_played) do
             if c.suit == 3 then return { mult_mod = 3 } end  -- Clubs
         end
     end

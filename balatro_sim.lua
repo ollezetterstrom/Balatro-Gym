@@ -207,32 +207,32 @@ _reg_joker("j_joker", "Joker", 1, 3, function(ctx, st, jk)
 end)
 
 _reg_joker("j_greedy", "Greedy Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.scoring then
-        for _, c in ipairs(ctx.scoring) do
+    if ctx.joker_main and ctx.all_played then
+        for _, c in ipairs(ctx.all_played) do
             if c.suit == 4 then return { mult_mod = 3 } end  -- Diamonds
         end
     end
 end)
 
 _reg_joker("j_lusty", "Lusty Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.scoring then
-        for _, c in ipairs(ctx.scoring) do
+    if ctx.joker_main and ctx.all_played then
+        for _, c in ipairs(ctx.all_played) do
             if c.suit == 2 then return { mult_mod = 3 } end  -- Hearts
         end
     end
 end)
 
 _reg_joker("j_wrathful", "Wrathful Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.scoring then
-        for _, c in ipairs(ctx.scoring) do
+    if ctx.joker_main and ctx.all_played then
+        for _, c in ipairs(ctx.all_played) do
             if c.suit == 1 then return { mult_mod = 3 } end  -- Spades
         end
     end
 end)
 
 _reg_joker("j_gluttonous", "Gluttonous Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.scoring then
-        for _, c in ipairs(ctx.scoring) do
+    if ctx.joker_main and ctx.all_played then
+        for _, c in ipairs(ctx.all_played) do
             if c.suit == 3 then return { mult_mod = 3 } end  -- Clubs
         end
     end
@@ -480,6 +480,7 @@ end
 
 local function _highest(hand)
     local best, bv = nil, -1
+    local fallback = hand[1]
     for i = 1, #hand do
         local c = hand[i]
         if c.enhancement ~= 6 then
@@ -487,7 +488,7 @@ local function _highest(hand)
             if v > bv then bv = v; best = c end
         end
     end
-    return best and {best} or {}
+    return best and {best} or (fallback and {fallback} or {})
 end
 
 local function _flush(hand)
@@ -682,7 +683,8 @@ function Sim.Engine.calculate(state, played)
                 local ctx = {
                     joker_main = true, hand_type = hand_type,
                     all_hands = all_hands, poker_hands = all_hands,
-                    scoring = scoring, my_joker_index = ji,
+                    scoring = scoring, all_played = played,
+                    my_joker_index = ji,
                 }
                 local fx = def.apply(ctx, state, jk)
                 if fx then

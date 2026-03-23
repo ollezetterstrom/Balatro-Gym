@@ -26,6 +26,7 @@ end
 
 local function _highest(hand)
     local best, bv = nil, -1
+    local fallback = hand[1]
     for i = 1, #hand do
         local c = hand[i]
         if c.enhancement ~= 6 then
@@ -33,7 +34,7 @@ local function _highest(hand)
             if v > bv then bv = v; best = c end
         end
     end
-    return best and {best} or {}
+    return best and {best} or (fallback and {fallback} or {})
 end
 
 local function _flush(hand)

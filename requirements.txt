@@ -1,3 +1,7 @@
 gymnasium>=0.29
 lupa>=2.0
 numpy>=1.26
+
+# For training (pip install -r requirements-train.txt):
+# stable-baselines3>=2.0
+# tensorboard
