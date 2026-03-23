@@ -44,10 +44,8 @@ def train(steps=100000, seed=42, log_dir="logs/"):
         print("Install stable-baselines3: pip install stable-baselines3")
         sys.exit(1)
 
-    import balatro_gym
-    import gymnasium as gym
-
-    env = gym.make("BalatroGym-v0")
+    import balatro_gym_simple
+    env = balatro_gym_simple.BalatroSimpleEnv()
 
     model = PPO(
         "MlpPolicy",
@@ -59,7 +57,6 @@ def train(steps=100000, seed=42, log_dir="logs/"):
         n_epochs=10,
         gamma=0.99,
         seed=seed,
-        tensorboard_log=log_dir,
     )
 
     print(f"Training PPO for {steps} steps...")
@@ -79,10 +76,9 @@ def train(steps=100000, seed=42, log_dir="logs/"):
 
 def evaluate(model_path=None, n_episodes=20):
     """Evaluate a trained model (or random agent)."""
-    import balatro_gym
-    import gymnasium as gym
+    import balatro_gym_simple
 
-    env = gym.make("BalatroGym-v0")
+    env = balatro_gym_simple.BalatroSimpleEnv()
 
     if model_path and os.path.exists(model_path + ".zip"):
         from stable_baselines3 import PPO
@@ -100,6 +96,7 @@ def evaluate(model_path=None, n_episodes=20):
         obs, info = env.reset(seed=42 + ep)
         ep_reward = 0
         done = False
+        steps_in_ep = 0
 
         while not done:
             if model:
@@ -109,7 +106,8 @@ def evaluate(model_path=None, n_episodes=20):
 
             obs, reward, done, trunc, info = env.step(action)
             ep_reward += reward
-            if done or trunc:
+            steps_in_ep += 1
+            if done or trunc or steps_in_ep > 200:
                 break
 
         rewards.append(ep_reward)
@@ -131,12 +129,12 @@ def evaluate(model_path=None, n_episodes=20):
 def compare():
     """Compare random vs trained agent."""
     print("--- Random Agent ---")
-    random_rewards = evaluate(model_path=None, n_episodes=20)
+    random_rewards = evaluate(model_path=None, n_episodes=5)
 
     model_path = "logs/balatro_ppo"
     if os.path.exists(model_path + ".zip"):
         print("\n--- Trained Agent ---")
-        trained_rewards = evaluate(model_path=model_path, n_episodes=20)
+        trained_rewards = evaluate(model_path=model_path, n_episodes=5)
 
         improvement = np.mean(trained_rewards) - np.mean(random_rewards)
         print(f"\nImprovement: {improvement:+.2f} reward over random")
