@@ -125,36 +125,35 @@ class BalatroEnv(gym.Env):
         self._seed = seed
 
     def reset(self, *, seed=None, options=None):
+        # Gymnasium requires integer seed; our Lua engine uses string seeds
+        if seed is not None:
+            seed = int(seed)
         super().reset(seed=seed)
 
-        use_seed = str(seed if seed is not None else self._seed or "BALATRO")
-        lua_obs, lua_info = self.lua_env.reset(use_seed)
+        lua_seed = str(seed if seed is not None else self._seed or 42)
+        lua_obs, lua_info = self.lua_env.reset(lua_seed)
 
-        # Store state reference — Env.reset returns (obs, info) but we need the
-        # actual state. Re-create it the same way the env does.
-        # Since we can't easily extract the state from reset, we step once
-        # with no effect, or we re-derive the state.
-        # Actually, the Lua Env.reset creates state internally. We need to
-        # capture it. Let's add a helper.
-        self._lua_state = self._get_current_state(use_seed)
+        self._lua_state = self._get_current_state(lua_seed)
 
         obs = _obs_to_numpy(lua_obs)
-        info = {"seed": use_seed, "ante": 1}
+        info = {"seed": lua_seed, "ante": 1}
         return obs, info
 
     def _get_current_state(self, seed_str):
-        """Reconstruct the state the same way Env.reset does."""
-        # Env.reset creates state via Sim.State.new + Blind.setup
-        # We need to replicate this so we can pass it to Env.step
-        E = self.sim.ENUMS
-        rng = self.sim.RNG.new(seed_str)
-        state = self.sim.State.new({"rng": rng, "seed": seed_str})
-        self.sim.Blind.init_ante(state)
-        btype = self.sim.Blind.next_type(state)
-        if btype:
-            self.sim.Blind.setup(state, btype)
-            state.phase = E.PHASE.SELECTING_HAND
+        """Create state entirely in Lua (avoids Python→Lua table issues)."""
+        runtime = _LUA_RUNTIME
+        lua_code = f"""
+        local rng = Sim.RNG.new("{seed_str}")
+        local state = Sim.State.new({{rng = rng, seed = "{seed_str}"}})
+        Sim.Blind.init_ante(state)
+        local btype = Sim.Blind.next_type(state)
+        if btype then
+            Sim.Blind.setup(state, btype)
+            state.phase = Sim.ENUMS.PHASE.SELECTING_HAND
+        end
         return state
+        """
+        return runtime.execute(lua_code)
 
     def step(self, action):
         if self._lua_state is None:
@@ -216,7 +215,7 @@ if __name__ == "__main__":
     print("=" * 40)
 
     env = BalatroEnv()
-    obs, info = env.reset(seed="TEST_PYTHON")
+    obs, info = env.reset(seed=42)
     print(f"Observation shape: {obs.shape}")
     print(f"Info: {info}")
 

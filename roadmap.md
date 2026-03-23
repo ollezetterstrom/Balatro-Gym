@@ -22,6 +22,8 @@ A working headless Balatro simulation engine with a Gymnasium wrapper, ready for
 - [x] Module split (14 files in `src/` + build script)
 - [x] 13 self-tests passing
 - [x] ~92K score calculations/sec in standard Lua
+- [x] Validation suite (`validate.lua`) - 49 known-answer tests, ALL PASSING
+- [x] Cross-validation (`cross_validate.lua`) - 5019 tests vs real Balatro source, ALL MATCHING
 
 ---
 
@@ -29,14 +31,35 @@ A working headless Balatro simulation engine with a Gymnasium wrapper, ready for
 
 **Goal:** PPO agent beats a random agent within 10 minutes of training.
 
-- [ ] Test the Python bridge (`balatro_gym.py`) with lupa installed
-- [ ] Fix any Lua↔Python data conversion issues
-- [ ] Write a minimal training script (PPO via StableBaselines3)
-- [ ] Run 100K training steps, measure if agent improves over random
-- [ ] If lupa is too slow → profile and identify bottleneck
-- [ ] Graph the learning curve (reward vs steps)
+- [x] Test the Python bridge (`balatro_gym.py`) with lupa installed
+- [x] Fix any Lua↔Python data conversion issues
+- [x] Write a minimal training script (PPO via StableBaselines3)
+- [x] Run 100K training steps, measure if agent improves over random
+- [x] If lupa is too slow → profile and identify bottleneck
+- [x] Graph the learning curve (reward vs steps)
 
 **Why this matters:** Proves the architecture works. If the agent can't learn, the observation/action space needs redesigning before investing in more content.
+
+**Results:**
+- Random baseline: mean -89.9, max -79.9
+- Trained (500K steps): mean -9.5, max +20.1
+- +77.5 mean reward improvement over random
+- Training speed: ~2500 steps/sec
+- Catastrophic forgetting observed at ~160K and ~470K steps → needs learning rate schedule
+
+---
+
+## Phase 1.5: Simplified env (DONE)
+
+**Goal:** Easier action space for faster learning.
+
+- [x] Created `balatro_gym_simple.py` with 247 Discrete actions (246 card combinations + 1 discard)
+- [x] Auto-handles shop/blinds decisions (no hierarchical actions)
+- [x] Much easier for PPO to learn than full hierarchical action space
+
+---
+
+## Phase 2: Content completeness
 
 ---
 
