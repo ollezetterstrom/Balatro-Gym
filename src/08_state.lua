@@ -14,6 +14,8 @@ function Sim.State.new(opts)
     if not opts.deck then Sim.RNG.shuffle(rng, deck) end
     local hl = {}
     for i = 1, 12 do hl[i] = 1 end
+    local htc = {}
+    for i = 1, 12 do htc[i] = 0 end
     return {
         deck=deck, hand={}, discard={}, hand_limit=opts.hand_size or D.hand_size,
         jokers=opts.jokers or {}, joker_slots=D.joker_slots,
@@ -23,18 +25,22 @@ function Sim.State.new(opts)
         ante=opts.ante or 1, round=0,
         hands_left=D.hands, discards_left=D.discards, hands_played=0,
         blind_type="none", blind_chips=300, blind_beaten=false,
-        selection={}, hand_levels=hl,
+        selection={}, hand_levels=hl, hand_type_counts=htc,
         chips=0, total_chips=0,
         deck_count=52,
         pack_cards=nil, last_consumable=nil,
         rng=rng, _joker_n=0, _cons_n=0,
+        ride_the_bus=0, cards_drawn=0,
     }
 end
 
 function Sim.State.draw(state)
     if #state.hand >= state.hand_limit then return state end
     local n = math.min(state.hand_limit - #state.hand, #state.deck)
-    for i = 1, n do state.hand[#state.hand+1] = table.remove(state.deck, 1) end
+    for i = 1, n do
+        state.hand[#state.hand+1] = table.remove(state.deck, 1)
+        state.cards_drawn = state.cards_drawn + 1
+    end
     return state
 end
 
@@ -50,7 +56,8 @@ function Sim.State.rebuild_deck(state)
 end
 
 function Sim.State.interest(state)
-    return math.min(math.floor(state.dollars / 5), 5)
+    local cap = state._interest_cap or 5
+    return math.min(math.floor(state.dollars / 5), cap)
 end
 
 function Sim.State.level_up(state, ht, amt)

@@ -201,14 +201,15 @@ t, c, m = score(
 )
 check("The Trio (×3 on Trips)", t, 459)
 
--- Greedy Joker (+3 if Diamond): Pair of 2s + 5♦ in scoring
--- = (10 + 2 + 2) × (2 + 3) = 70
+-- Greedy Joker (+3 per Diamond scored): Pair of 2♦s
+-- Scoring cards: 2♦, 2♦ (both Diamond) → +3 +3 = +6 mult
+-- = (10 + 2 + 2) × (2 + 6) = 112
 t, c, m = score(
-    {C(2,1), C(2,2), C(5,4), C(9,3), C(3,1), C(7,2), C(10,3), C(6,1)},
+    {C(2,4), C(2,4), C(5,3), C(9,3), C(3,1), C(7,2), C(10,3), C(6,1)},
     {{id=2, edition=0, eternal=false, uid=1}},
-    {1, 2, 3}  -- pair + 5♦
+    {1, 2}  -- pair of 2♦
 )
-check("Greedy Joker (+3 on ♦)", t, 70)
+check("Greedy Joker (+3 on ♦)", t, 112)
 
 -- Fibonacci (+8 per Ace/2/3/5/8): Pair of 2s
 -- = (10 + 2 + 2) × (2 + 8 + 8) = 252

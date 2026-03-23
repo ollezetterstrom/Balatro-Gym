@@ -127,7 +127,37 @@ local function _step_selecting(state, atype, value)
             state.chips = state.chips + total
             state.hands_left = state.hands_left - 1
             state.hands_played = state.hands_played + 1
-            for _, c in ipairs(played) do state.discard[#state.discard+1] = c end
+            state.hand_type_counts[ht] = (state.hand_type_counts[ht] or 0) + 1
+
+            -- Ride the Bus: reset on face cards, increment otherwise
+            local has_face = false
+            for _, c in ipairs(played) do
+                if c.rank >= 11 and c.rank <= 13 then has_face = true; break end
+            end
+            if has_face then
+                state.ride_the_bus = 0
+            else
+                state.ride_the_bus = (state.ride_the_bus or 0) + 1
+            end
+
+            -- Glass card destruction (1/4 chance per Glass card)
+            local destroyed = {}
+            for _, c in ipairs(played) do
+                if c.enhancement == 4 and not c.debuffed then
+                    if state.rng and Sim.RNG.next(state.rng) < 0.25 then
+                        destroyed[c] = true
+                    end
+                end
+            end
+
+            -- Add played cards to discard (except destroyed ones)
+            for _, c in ipairs(played) do
+                if not destroyed[c] then
+                    state.discard[#state.discard+1] = c
+                else
+                    state.deck_count = state.deck_count - 1
+                end
+            end
             Sim.State.draw(state)
             state.selection = {}
 
@@ -142,8 +172,19 @@ local function _step_selecting(state, atype, value)
                     if def and def.apply then
                         local ctx = { after_play = true, hand_type = ht, scoring = scoring }
                         local fx = def.apply(ctx, state, jk)
-                        if fx and fx.level_up then
-                            Sim.State.level_up(state, fx.level_up)
+                        if fx then
+                            if fx.level_up then
+                                Sim.State.level_up(state, fx.level_up)
+                            end
+                            if fx.chip_mod then
+                                state.chips = state.chips + fx.chip_mod
+                                total = total + fx.chip_mod
+                            end
+                            if fx.mult_mod then
+                                -- After-play mult is applied as chip bonus (simplified)
+                                state.chips = state.chips + fx.mult_mod
+                                total = total + fx.mult_mod
+                            end
                         end
                     end
                 end
@@ -181,7 +222,9 @@ local function _step_selecting(state, atype, value)
             end
             local disc_ht = Sim.Eval.get_hand(disc_cards)
 
-            -- Trigger Burnt Joker (on_discard, is_first_discard)
+            -- Trigger Burnt Joker (on_discard, is_first_discard) and Ramen
+            local num_discarded = #sorted
+            local destroyed_jokers = {}
             if state.jokers then
                 for ji = 1, #state.jokers do
                     local jk = state.jokers[ji]
@@ -191,13 +234,23 @@ local function _step_selecting(state, atype, value)
                             on_discard = true,
                             is_first_discard = (state.discards_left == D.discards),
                             discarded_hand_type = disc_ht,
+                            cards_discarded = num_discarded,
                         }
                         local fx = def.apply(ctx, state, jk)
-                        if fx and fx.level_up then
-                            Sim.State.level_up(state, fx.level_up)
+                        if fx then
+                            if fx.level_up then
+                                Sim.State.level_up(state, fx.level_up)
+                            end
+                            if fx.destroy_self then
+                                destroyed_jokers[#destroyed_jokers+1] = ji
+                            end
                         end
                     end
                 end
+            end
+            -- Remove destroyed jokers (reverse order)
+            for i = #destroyed_jokers, 1, -1 do
+                table.remove(state.jokers, destroyed_jokers[i])
             end
 
             for _, idx in ipairs(sorted) do
@@ -242,6 +295,21 @@ function _advance_blind(state)
     local reward_dollars = Sim.Blind.reward(
         bname=="Small" and 1 or bname=="Big" and 2 or 3)
     state.dollars = state.dollars + reward_dollars + Sim.State.interest(state)
+
+    -- Round-end joker effects (Delayed Gratification, etc.)
+    if state.jokers then
+        for ji = 1, #state.jokers do
+            local jk = state.jokers[ji]
+            local def = Sim._JOKER_BY_ID[jk.id]
+            if def and def.apply then
+                local ctx = { round_end = true }
+                local fx = def.apply(ctx, state, jk)
+                if fx and fx.dollars then
+                    state.dollars = state.dollars + fx.dollars
+                end
+            end
+        end
+    end
 
     -- Move played cards to discard, clear hand
     for _, c in ipairs(state.hand) do state.discard[#state.discard+1] = c end

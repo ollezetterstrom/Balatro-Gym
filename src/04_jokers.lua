@@ -19,35 +19,31 @@ _reg_joker("j_joker", "Joker", 1, 3, function(ctx, st, jk)
     if ctx.joker_main then return { mult_mod = 4 } end
 end)
 
+local function _is_suit(card, target_suit)
+    return card.suit == target_suit or card.enhancement == 3  -- Wild counts as any suit
+end
+
 _reg_joker("j_greedy", "Greedy Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.all_played then
-        for _, c in ipairs(ctx.all_played) do
-            if c.suit == 4 then return { mult_mod = 3 } end  -- Diamonds
-        end
+    if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
+        if _is_suit(ctx.other_card, 4) then return { mult = 3 } end  -- Diamonds
     end
 end)
 
 _reg_joker("j_lusty", "Lusty Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.all_played then
-        for _, c in ipairs(ctx.all_played) do
-            if c.suit == 2 then return { mult_mod = 3 } end  -- Hearts
-        end
+    if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
+        if _is_suit(ctx.other_card, 2) then return { mult = 3 } end  -- Hearts
     end
 end)
 
 _reg_joker("j_wrathful", "Wrathful Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.all_played then
-        for _, c in ipairs(ctx.all_played) do
-            if c.suit == 1 then return { mult_mod = 3 } end  -- Spades
-        end
+    if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
+        if _is_suit(ctx.other_card, 1) then return { mult = 3 } end  -- Spades
     end
 end)
 
 _reg_joker("j_gluttonous", "Gluttonous Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.all_played then
-        for _, c in ipairs(ctx.all_played) do
-            if c.suit == 3 then return { mult_mod = 3 } end  -- Clubs
-        end
+    if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
+        if _is_suit(ctx.other_card, 3) then return { mult = 3 } end  -- Clubs
     end
 end)
 
@@ -156,9 +152,69 @@ end)
 _reg_joker("j_sly", "Sly Joker", 1, 3, function(ctx, st, jk)
     if ctx.joker_main then
         return { chip_mod = 50 }
-
-
     end
+end)
+
+-- === New jokers (7 uncommon/rare) ===
+
+_reg_joker("j_delayed_gratification", "Delayed Gratification", 1, 4, function(ctx, st, jk)
+    if ctx.round_end then
+        -- Only if no discards were used this round
+        if st.discards_left == D.discards then
+            return { dollars = 2 * st.discards_left }
+        end
+    end
+end)
+
+_reg_joker("j_supernova", "Supernova", 1, 5, function(ctx, st, jk)
+    if ctx.joker_main and ctx.hand_type then
+        local played = st.hand_type_counts[ctx.hand_type] or 0
+        if played > 0 then return { mult_mod = played } end
+    end
+end)
+
+_reg_joker("j_ride_the_bus", "Ride the Bus", 1, 5, function(ctx, st, jk)
+    if ctx.joker_main then
+        if st.ride_the_bus and st.ride_the_bus > 0 then
+            return { mult_mod = st.ride_the_bus }
+        end
+    end
+end)
+
+_reg_joker("j_blackboard", "Blackboard", 2, 6, function(ctx, st, jk)
+    if ctx.joker_main then
+        local all_dark = true
+        for _, c in ipairs(st.hand) do
+            if c.enhancement ~= 6 and c.enhancement ~= 3 and c.suit ~= 1 and c.suit ~= 3 then
+                all_dark = false; break
+            end
+        end
+        if all_dark then return { Xmult_mod = 3 } end
+    end
+end)
+
+_reg_joker("j_ramen", "Ramen", 2, 6, function(ctx, st, jk)
+    if ctx.on_discard then
+        -- Lose 0.01 x_mult per card discarded
+        jk._ramen_x = (jk._ramen_x or 2.0) - 0.01 * (ctx.cards_discarded or 1)
+        if jk._ramen_x <= 1 then
+            return { destroy_self = true }
+        end
+    end
+    if ctx.joker_main then
+        local x = jk._ramen_x or 2.0
+        if x > 1 then return { Xmult_mod = x } end
+    end
+end)
+
+_reg_joker("j_acrobat", "Acrobat", 2, 6, function(ctx, st, jk)
+    if ctx.joker_main and st.hands_left == 0 then
+        return { Xmult_mod = 3 }
+    end
+end)
+
+_reg_joker("j_sock_and_buskin", "Sock and Buskin", 2, 6, function(ctx, st, jk)
+    -- Handled in engine re-trigger loop
 end)
 
 Sim.JOKER_POOL = {}

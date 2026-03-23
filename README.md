@@ -12,7 +12,7 @@ git clone https://github.com/ollezetterstrom/Balatro-Gym.git
 cd Balatro-Gym
 
 # Run the engine (no install needed)
-lua balatro_sim.lua            # 13 self-tests
+lua balatro_sim.lua            # 45 self-tests
 lua validate.lua               # 49 scoring tests against real Balatro
 lua cross_validate.lua 1000    # 1000 hand evaluations against real game source
 
@@ -39,16 +39,16 @@ Training speed: ~2500 steps/sec (500K steps in ~3 minutes).
 | Test suite | Tests | Result |
 |-----------|-------|--------|
 | `validate.lua` | 49 known-answer scoring tests | 49/49 ✓ |
-| `cross_validate.lua` | 5019 hand evaluations vs real Balatro source | 5019/5019 ✓ |
-| `balatro_sim.lua` | Self-consistency tests | 13/13 ✓ |
+| `cross_validate.lua` | 1019 hand evaluations vs real Balatro source | 1019/1019 ✓ |
+| `balatro_sim.lua` | Self-consistency tests | 45/45 ✓ |
 
-Every poker hand type is evaluated identically to Balatro's actual engine. Every scoring calculation matches known game values.
+Every poker hand type is evaluated identically to Balatro's actual engine. Every scoring calculation matches known game values. All joker effects audited against real game source (`card.lua`).
 
 ## Project structure
 
 ```
 .
-├── balatro_sim.lua          Single-file distribution (1789 lines, zero deps)
+├── balatro_sim.lua          Single-file distribution (2834 lines, zero deps)
 ├── balatro_sim_dev.lua      Dev loader (dofile's all src/*.lua)
 ├── balatro_gym.py           Python Gymnasium wrapper (requires lupa)
 ├── test_fidelity.py         State-transition recorder for Rust parity
@@ -60,8 +60,8 @@ Every poker hand type is evaluated identically to Balatro's actual engine. Every
     ├── 01_enums.lua         Constants, hand stats, defaults
     ├── 02_rng.lua           Deterministic LCG
     ├── 03_cards.lua         Card constructor, deck builder
-    ├── 04_jokers.lua        All 21 joker definitions
-    ├── 05_consumables.lua   Consumables + advanced jokers
+    ├── 04_jokers.lua        All 28 joker definitions
+    ├── 05_consumables.lua   49 consumables (12 planets, 21 tarots, 16 spectrals)
     ├── 06_evaluator.lua     Poker hand evaluator (12 hand types)
     ├── 07_engine.lua        Scoring engine
     ├── 08_state.lua         Game state, draw, discard
@@ -69,7 +69,7 @@ Every poker hand type is evaluated identically to Balatro's actual engine. Every
     ├── 10_shop.lua          Shop, packs, economy
     ├── 11_observation.lua   129-float observation encoder
     ├── 12_env.lua           Gymnasium env (reset/step)
-    └── 13_test.lua          Self-tests + random agent
+    └── 13_test.lua          45 self-tests + random agent
 ```
 
 ## Development workflow
@@ -115,7 +115,7 @@ Saves `(state, action, next_state, reward)` tuples. When building the Rust port,
 ## Features
 
 ### Poker evaluator
-All 12 hand types (High Card → Flush Five). Cascade logic (Five of a Kind also scores as Four, Three, Pair). Wild Cards, Stone Cards.
+All 12 hand types (High Card → Flush Five). Cascade logic (Five/Four of a Kind also scores sub-hands, but Full House does NOT cascade Three of a Kind — matches real game). Wild Cards, Stone Cards.
 
 ### Scoring
 ```
@@ -123,15 +123,15 @@ total = floor((base_chips + card_chips + joker_chips) × (base_mult × card_mult
 ```
 Card enhancements, editions, seals, joker effects, hand leveling.
 
-### Jokers (21)
+### Jokers (28)
 
 | Joker | Rarity | Effect |
 |-------|--------|--------|
 | Joker | Common | +4 Mult |
-| Greedy Joker | Common | +3 Mult if hand contains a Diamond |
-| Lusty Joker | Common | +3 Mult if hand contains a Heart |
-| Wrathful Joker | Common | +3 Mult if hand contains a Spade |
-| Gluttonous Joker | Common | +3 Mult if hand contains a Club |
+| Greedy Joker | Common | +3 Mult per played Diamond card |
+| Lusty Joker | Common | +3 Mult per played Heart card |
+| Wrathful Joker | Common | +3 Mult per played Spade card |
+| Gluttonous Joker | Common | +3 Mult per played Club card |
 | The Duo | Rare | ×2 Mult if hand contains Pair |
 | The Trio | Rare | ×3 Mult if hand contains Three of a Kind |
 | Blueprint | Rare | Copies the joker to its right |
@@ -148,6 +148,13 @@ Card enhancements, editions, seals, joker effects, hand leveling.
 | Sly Joker | Common | +50 Chips |
 | Sixth Sense | Uncommon | First hand: single 6 → destroy + Spectral |
 | Hiker | Common | Each scored card permanently gains +4 Chips |
+| Delayed Gratification | Common | +$2 per remaining discard if none used (round end) |
+| Supernova | Uncommon | +Mult = times played this hand type |
+| Ride the Bus | Uncommon | +1 Mult per hand without face cards, resets on face |
+| Blackboard | Rare | ×3 Mult if all hand cards are Spade/Club/Wild |
+| Ramen | Uncommon | ×2 Mult, -0.01 per card discarded, destroys at ×1 |
+| Acrobat | Rare | ×3 Mult on last hand of round |
+| Sock and Buskin | Uncommon | Re-trigger all played face card effects |
 
 ### Boss blinds (8)
 
@@ -162,14 +169,22 @@ Card enhancements, editions, seals, joker effects, hand leveling.
 | The Goad | All Spade cards debuffed |
 | The Window | All Diamond cards debuffed |
 
-### Consumables (4)
+### Consumables (49)
 
-| Consumable | Set | Effect |
-|------------|-----|--------|
-| Pluto | Planet | Level up High Card |
-| Mercury | Planet | Level up Pair |
-| The Empress | Tarot | Enhance 2 selected cards to Mult |
-| The Fool | Tarot | Copy the last used consumable |
+**Planets (12):** Pluto (High Card), Mercury (Pair), Venus (Three of a Kind), Earth (Full House), Mars (Four of a Kind), Jupiter (Flush), Saturn (Straight), Neptune (Straight Flush), Uranus (Two Pair), Planet X (Five of a Kind), Ceres (Flush House), Eris (Flush Five)
+
+**Tarots (21):** The Fool, The Magician, The High Priestess, The Emperor, The Hierophant, The Lovers, The Chariot, Strength, The Hermit, Wheel of Fortune, Justice, The Hanged Man, Death, Temperance, The Devil, The Tower, The Star, The Moon, The Sun, The World, The Empress
+
+**Spectrals (16):** Familiar, Grim, Incantation, Talisman, Aura, Wraith, Sigil, Ouija, Ectoplasm, Immolate, Ankh, Deja Vu, Hex, Trance, Medium, Cryptid
+
+### Card enhancements
+Bonus (+30 chips), Mult (+4 mult), Wild (any suit), Glass (×2 mult, 1/4 shatter), Steel (×1.5 mult held), Stone (+50 chips), Gold (+$3 held), Lucky (1/5 +20 mult, 1/15 +$20)
+
+### Editions
+Foil (+50 chips), Holographic (+10 mult), Polychrome (×1.5 mult), Negative (+1 joker slot)
+
+### Seals
+Red (re-trigger), Gold (+$3 on score), Blue (create planet at round end), Purple (create tarot on discard)
 
 ### Game systems
 - Blinds: Small → Big → Boss, ante 1–8

@@ -7,9 +7,13 @@ A working headless Balatro simulation engine with a Gymnasium wrapper, ready for
 **What's done:**
 - [x] Core scoring engine (chips × mult, all 12 hand types)
 - [x] Deterministic RNG (LCG, same seed = same game everywhere)
-- [x] 21 jokers with full scoring integration (Blueprint copy, Hiker permabuff, Fibonacci per-card, etc.)
+- [x] 28 jokers with full scoring integration (Blueprint copy, Hiker permabuff, Sock and Buskin re-trigger, etc.)
 - [x] 8 boss blinds with debuff/setup effects (The Wall, The Arm, The Water, etc.)
-- [x] 4 consumables (Pluto, Mercury, The Empress, The Fool)
+- [x] Boss blind rotation (don't repeat until all seen)
+- [x] 49 consumables (12 planets, 21 tarots, 16 spectrals)
+- [x] Card enhancements: Bonus, Mult, Wild, Glass (1/4 shatter), Steel (×1.5 held), Stone, Gold (+$3 held), Lucky (1/5 +20 mult, 1/15 +$20)
+- [x] Card editions: Foil, Holographic, Polychrome, Negative
+- [x] Seals: Red (re-trigger), Gold (+$3), Blue (planet), Purple (tarot)
 - [x] Shop system (jokers, boosters, consumables, reroll, sell)
 - [x] Pack opening phase (nested state, 3 joker choices)
 - [x] Economy (blind rewards, interest, joker selling)
@@ -20,10 +24,11 @@ A working headless Balatro simulation engine with a Gymnasium wrapper, ready for
 - [x] Gymnasium Python wrapper (`balatro_gym.py`)
 - [x] Fidelity tester for Rust port (`test_fidelity.py`)
 - [x] Module split (14 files in `src/` + build script)
-- [x] 13 self-tests passing
+- [x] 45 self-tests passing
 - [x] ~92K score calculations/sec in standard Lua
 - [x] Validation suite (`validate.lua`) - 49 known-answer tests, ALL PASSING
-- [x] Cross-validation (`cross_validate.lua`) - 5019 tests vs real Balatro source, ALL MATCHING
+- [x] Cross-validation (`cross_validate.lua`) - 1019 tests vs real Balatro source, ALL MATCHING
+- [x] Joker effects audited against real game source (`card.lua`)
 
 ---
 
@@ -59,58 +64,38 @@ A working headless Balatro simulation engine with a Gymnasium wrapper, ready for
 
 ---
 
-## Phase 2: Content completeness
+## Phase 2: Content completeness (DONE)
 
----
+**Goal:** Match the full game's common card library. All effects verified against real Balatro source.
 
-## Phase 2: Content completeness
-
-**Goal:** Match the full game's joker/card library (at least the common ones).
-
-- [ ] Missing card effects:
-  - [ ] Steel (×1.5 mult when held in hand)
-  - [ ] Gold (+3 money when held in hand)
-  - [ ] Lucky (20% chance +20 mult, 1/5 chance +$20)
-  - [ ] Wild (counts as any suit for flushes)
-  - [ ] Glass destruction (1/4 chance to shatter)
-  - [ ] Red seal (re-trigger scoring)
-  - [ ] Gold seal (+3 money when scored)
-- [ ] Missing jokers (next batch):
-  - [ ] Joker Stencil bonus fix (currently works)
-  - [ ] Delayed Gratification (+2 per discard if none used)
-  - [ ] Supernova (+mult = times played this hand type)
-  - [ ] Ride the Bus (+1 mult per hand without face cards, reset on face)
-  - [ ] Blackboard (×3 if all remaining hand cards are Spade/Club)
-  - [ ] Ramen (×2 mult, -0.01 per card drawn)
-  - [ ] Acrobat (×3 on last hand of round)
-  - [ ] Sock and Buskin (re-trigger all face cards)
-- [ ] Missing tarot cards (18 remaining):
-  - [ ] The Magician (Lucky enhancement)
-  - [ ] The High Priestess (create 2 planets)
-  - [ ] The Emperor (create 2 tarots)
-  - [ ] The Hierophant (Bonus enhancement)
-  - [ ] The Lovers (Wild enhancement)
-  - [ ] The Chariot (Steel enhancement)
-  - [ ] Strength (+1 rank to 2 cards)
-  - [ ] The Hermit (double money, max $20)
-  - [ ] Wheel of Fortune (25% chance edition)
-  - [ ] Justice (Glass enhancement)
-  - [ ] The Hanged Man (destroy 2 cards)
-  - [ ] Death (copy 1 card to another)
-  - [ ] Temperance (sell value of all jokers)
-  - [ ] The Devil (Gold enhancement)
-  - [ ] The Tower (Stone enhancement)
-  - [ ] The Star/Moon/Sun/World (change suit)
-- [ ] Missing planet cards (10 remaining):
-  - [ ] Venus (Three of a Kind), Earth (Full House), Mars (Four of a Kind),
-  - [ ] Jupiter (Flush), Saturn (Straight), Neptune (Straight Flush),
-  - [ ] Uranus (Two Pair), Planet X (Five of a Kind),
-  - [ ] Ceres (Flush House), Eris (Flush Five)
-- [ ] Spectral cards:
-  - [ ] Familiar, Grim, Incantation, Talisman, Aura, Wraith, Sigil, Ouija, Ectoplasm, Immolate, Ankh, Deja Vu, Hex, Trance, Medium, Cryptid
-- [ ] Boss blind rotation (don't repeat until all seen)
-- [ ] Interest cap voucher ($20)
-- [ ] More deck types (Red, Blue, Yellow, Green, Black, Abandoned, Checkered, Zodiac, Plasma)
+- [x] Card enhancements:
+  - [x] Steel (×1.5 mult when held in hand)
+  - [x] Gold (+3 money when held in hand)
+  - [x] Lucky (1/5 chance +20 mult, 1/15 chance +$20)
+  - [x] Wild (counts as any suit for flushes + suit jokers)
+  - [x] Glass destruction (1/4 chance to shatter after scoring)
+  - [x] Red seal (re-trigger scoring + held-in-hand effects)
+  - [x] Gold seal (+3 money when scored)
+  - [x] Blue seal (create planet at round end)
+  - [x] Purple seal (create tarot on discard)
+- [x] New jokers (7):
+  - [x] Delayed Gratification (+$2 per remaining discard if none used, round end)
+  - [x] Supernova (+mult = times played this hand type)
+  - [x] Ride the Bus (+1 mult per hand without face cards, reset on face)
+  - [x] Blackboard (×3 if all remaining hand cards are Spade/Club/Wild)
+  - [x] Ramen (×2 mult, -0.01 per card discarded, destroys at ×1)
+  - [x] Acrobat (×3 on last hand of round)
+  - [x] Sock and Buskin (re-trigger all played face card effects)
+- [x] Tarot cards (21):
+  - [x] All suit-change, enhancement, rank-change, and special tarots
+- [x] Planet cards (12):
+  - [x] All 12 hand types
+- [x] Spectral cards (16):
+  - [x] Familiar, Grim, Incantation, Talisman, Aura, Wraith, Sigil, Ouija, Ectoplasm, Immolate, Ankh, Deja Vu, Hex, Trance, Medium, Cryptid
+- [x] Boss blind rotation (don't repeat until all seen)
+- [x] Interest cap system (configurable via state._interest_cap)
+- [x] Joker effects audited against real game source (4 discrepancies found and fixed)
+- [ ] More deck types (Red, Blue, Yellow, Green, Black, Abandoned, Checkered, Zodiac, Plasma) — low priority
 
 ---
 
@@ -181,9 +166,10 @@ A working headless Balatro simulation engine with a Gymnasium wrapper, ready for
 |---|---|---|
 | Language | Lua (portable, fast) | Python only |
 | Dependencies | zero | numpy, gymnasium, poetry |
-| Gym wrapper | ✓ (untested) | ✓ (tested) |
-| Jokers | 21 | stubs |
-| Boss blinds | 8 | stubs |
+| Gym wrapper | ✓ | ✓ |
+| Jokers | 28 (all common/uncommon) | stubs |
+| Consumables | 49 (planets, tarots, spectrals) | none |
+| Boss blinds | 8 (with rotation) | stubs |
 | Full game loop | ✓ (shop, packs, blinds) | simplified |
 | RNG | deterministic | platform-dependent |
 | Rust port | planned | not planned |

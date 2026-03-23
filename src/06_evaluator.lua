@@ -37,12 +37,15 @@ local function _highest(hand)
     return best and {best} or (fallback and {fallback} or {})
 end
 
+local function _is_wild(card) return card.enhancement == 3 end
+local function _is_stone(card) return card.enhancement == 6 end
+
 local function _flush(hand)
     if #hand ~= 5 then return {} end
     local suit = nil
     for i = 1, #hand do
-        if hand[i].enhancement == 3 then -- Wild
-        elseif hand[i].enhancement == 6 then return {} -- Stone
+        if _is_wild(hand[i]) then -- Wild counts as any suit
+        elseif _is_stone(hand[i]) then return {} -- Stone breaks flush
         else
             if not suit then suit = hand[i].suit
             elseif hand[i].suit ~= suit then return {} end
@@ -127,6 +130,7 @@ function Sim.Eval.get_hand(cards)
         for _,c in ipairs(_2[1]) do fh[#fh+1]=c end
         all[HT.FULL_HOUSE] = fh
         if HT.FULL_HOUSE < best then best = HT.FULL_HOUSE; best_sc = fh end
+        -- Do NOT cascade Three of a Kind or Pair from Full House (matches real game)
     end
     if #_fl > 0 then
         all[HT.FLUSH] = _fl[1]
@@ -136,7 +140,7 @@ function Sim.Eval.get_hand(cards)
         all[HT.STRAIGHT] = _st[1]
         if HT.STRAIGHT < best then best = HT.STRAIGHT; best_sc = _st[1] end
     end
-    if #_3 > 0 then
+    if #_3 > 0 and not all[HT.FULL_HOUSE] then
         all[HT.THREE_OF_A_KIND] = _3[1]
         if HT.THREE_OF_A_KIND < best then best = HT.THREE_OF_A_KIND; best_sc = _3[1] end
         if not all[HT.PAIR] then all[HT.PAIR] = {_3[1][1],_3[1][2]} end

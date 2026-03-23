@@ -25,8 +25,23 @@ Sim.BOSS_BLINDS = {
 }
 
 function Sim.Blind.pick_boss(state, ante)
-    -- Pick a deterministic boss from the pool based on ante + rng
-    local idx = Sim.RNG.int(state.rng, 1, #Sim.BOSS_BLINDS)
+    -- Boss rotation: don't repeat until all seen
+    if not state._bosses_seen then state._bosses_seen = {} end
+
+    -- If all bosses have been seen, reset
+    local all_seen = true
+    for i = 1, #Sim.BOSS_BLINDS do
+        if not state._bosses_seen[i] then all_seen = false; break end
+    end
+    if all_seen then state._bosses_seen = {} end
+
+    -- Pick from unseen bosses
+    local unseen = {}
+    for i = 1, #Sim.BOSS_BLINDS do
+        if not state._bosses_seen[i] then unseen[#unseen+1] = i end
+    end
+    local idx = Sim.RNG.pick(state.rng, unseen)
+    state._bosses_seen[idx] = true
     return Sim.BOSS_BLINDS[idx]
 end
 

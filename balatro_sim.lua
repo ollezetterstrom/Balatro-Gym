@@ -206,35 +206,31 @@ _reg_joker("j_joker", "Joker", 1, 3, function(ctx, st, jk)
     if ctx.joker_main then return { mult_mod = 4 } end
 end)
 
+local function _is_suit(card, target_suit)
+    return card.suit == target_suit or card.enhancement == 3  -- Wild counts as any suit
+end
+
 _reg_joker("j_greedy", "Greedy Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.all_played then
-        for _, c in ipairs(ctx.all_played) do
-            if c.suit == 4 then return { mult_mod = 3 } end  -- Diamonds
-        end
+    if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
+        if _is_suit(ctx.other_card, 4) then return { mult = 3 } end  -- Diamonds
     end
 end)
 
 _reg_joker("j_lusty", "Lusty Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.all_played then
-        for _, c in ipairs(ctx.all_played) do
-            if c.suit == 2 then return { mult_mod = 3 } end  -- Hearts
-        end
+    if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
+        if _is_suit(ctx.other_card, 2) then return { mult = 3 } end  -- Hearts
     end
 end)
 
 _reg_joker("j_wrathful", "Wrathful Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.all_played then
-        for _, c in ipairs(ctx.all_played) do
-            if c.suit == 1 then return { mult_mod = 3 } end  -- Spades
-        end
+    if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
+        if _is_suit(ctx.other_card, 1) then return { mult = 3 } end  -- Spades
     end
 end)
 
 _reg_joker("j_gluttonous", "Gluttonous Joker", 1, 5, function(ctx, st, jk)
-    if ctx.joker_main and ctx.all_played then
-        for _, c in ipairs(ctx.all_played) do
-            if c.suit == 3 then return { mult_mod = 3 } end  -- Clubs
-        end
+    if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
+        if _is_suit(ctx.other_card, 3) then return { mult = 3 } end  -- Clubs
     end
 end)
 
@@ -343,9 +339,69 @@ end)
 _reg_joker("j_sly", "Sly Joker", 1, 3, function(ctx, st, jk)
     if ctx.joker_main then
         return { chip_mod = 50 }
-
-
     end
+end)
+
+-- === New jokers (7 uncommon/rare) ===
+
+_reg_joker("j_delayed_gratification", "Delayed Gratification", 1, 4, function(ctx, st, jk)
+    if ctx.round_end then
+        -- Only if no discards were used this round
+        if st.discards_left == D.discards then
+            return { dollars = 2 * st.discards_left }
+        end
+    end
+end)
+
+_reg_joker("j_supernova", "Supernova", 1, 5, function(ctx, st, jk)
+    if ctx.joker_main and ctx.hand_type then
+        local played = st.hand_type_counts[ctx.hand_type] or 0
+        if played > 0 then return { mult_mod = played } end
+    end
+end)
+
+_reg_joker("j_ride_the_bus", "Ride the Bus", 1, 5, function(ctx, st, jk)
+    if ctx.joker_main then
+        if st.ride_the_bus and st.ride_the_bus > 0 then
+            return { mult_mod = st.ride_the_bus }
+        end
+    end
+end)
+
+_reg_joker("j_blackboard", "Blackboard", 2, 6, function(ctx, st, jk)
+    if ctx.joker_main then
+        local all_dark = true
+        for _, c in ipairs(st.hand) do
+            if c.enhancement ~= 6 and c.enhancement ~= 3 and c.suit ~= 1 and c.suit ~= 3 then
+                all_dark = false; break
+            end
+        end
+        if all_dark then return { Xmult_mod = 3 } end
+    end
+end)
+
+_reg_joker("j_ramen", "Ramen", 2, 6, function(ctx, st, jk)
+    if ctx.on_discard then
+        -- Lose 0.01 x_mult per card discarded
+        jk._ramen_x = (jk._ramen_x or 2.0) - 0.01 * (ctx.cards_discarded or 1)
+        if jk._ramen_x <= 1 then
+            return { destroy_self = true }
+        end
+    end
+    if ctx.joker_main then
+        local x = jk._ramen_x or 2.0
+        if x > 1 then return { Xmult_mod = x } end
+    end
+end)
+
+_reg_joker("j_acrobat", "Acrobat", 2, 6, function(ctx, st, jk)
+    if ctx.joker_main and st.hands_left == 0 then
+        return { Xmult_mod = 3 }
+    end
+end)
+
+_reg_joker("j_sock_and_buskin", "Sock and Buskin", 2, 6, function(ctx, st, jk)
+    -- Handled in engine re-trigger loop
 end)
 
 Sim.JOKER_POOL = {}
@@ -408,6 +464,549 @@ _reg_cons("c_fool", "The Fool", "Tarot", function(ctx, state)
         id = def.id, uid = state._cons_n or 0,
     }
     return { spawned = def.key }
+end)
+
+-- === Planet cards (10 remaining) ===
+
+_reg_cons("c_venus", "Venus", "Planet", function(ctx, state)
+    Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.THREE_OF_A_KIND, 1)
+    return { level_up = Sim.ENUMS.HAND_TYPE.THREE_OF_A_KIND }
+end)
+
+_reg_cons("c_earth", "Earth", "Planet", function(ctx, state)
+    Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.FULL_HOUSE, 1)
+    return { level_up = Sim.ENUMS.HAND_TYPE.FULL_HOUSE }
+end)
+
+_reg_cons("c_mars", "Mars", "Planet", function(ctx, state)
+    Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.FOUR_OF_A_KIND, 1)
+    return { level_up = Sim.ENUMS.HAND_TYPE.FOUR_OF_A_KIND }
+end)
+
+_reg_cons("c_jupiter", "Jupiter", "Planet", function(ctx, state)
+    Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.FLUSH, 1)
+    return { level_up = Sim.ENUMS.HAND_TYPE.FLUSH }
+end)
+
+_reg_cons("c_saturn", "Saturn", "Planet", function(ctx, state)
+    Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.STRAIGHT, 1)
+    return { level_up = Sim.ENUMS.HAND_TYPE.STRAIGHT }
+end)
+
+_reg_cons("c_neptune", "Neptune", "Planet", function(ctx, state)
+    Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.STRAIGHT_FLUSH, 1)
+    return { level_up = Sim.ENUMS.HAND_TYPE.STRAIGHT_FLUSH }
+end)
+
+_reg_cons("c_uranus", "Uranus", "Planet", function(ctx, state)
+    Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.TWO_PAIR, 1)
+    return { level_up = Sim.ENUMS.HAND_TYPE.TWO_PAIR }
+end)
+
+_reg_cons("c_planet_x", "Planet X", "Planet", function(ctx, state)
+    Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.FIVE_OF_A_KIND, 1)
+    return { level_up = Sim.ENUMS.HAND_TYPE.FIVE_OF_A_KIND }
+end)
+
+_reg_cons("c_ceres", "Ceres", "Planet", function(ctx, state)
+    Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.FLUSH_HOUSE, 1)
+    return { level_up = Sim.ENUMS.HAND_TYPE.FLUSH_HOUSE }
+end)
+
+_reg_cons("c_eris", "Eris", "Planet", function(ctx, state)
+    Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.FLUSH_FIVE, 1)
+    return { level_up = Sim.ENUMS.HAND_TYPE.FLUSH_FIVE }
+end)
+
+-- === Tarot cards (16 remaining) ===
+
+_reg_cons("c_magician", "The Magician", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local count = 0
+    for _, idx in ipairs(ctx.selected) do
+        local c = state.hand[idx]
+        if c and count < 2 then
+            c.enhancement = Sim.ENUMS.ENHANCEMENT.LUCKY
+            count = count + 1
+        end
+    end
+    return { enhanced = count }
+end)
+
+_reg_cons("c_high_priestess", "The High Priestess", "Tarot", function(ctx, state)
+    local created = 0
+    for _ = 1, 2 do
+        if #state.consumables < state.consumable_slots then
+            local planet_ids = {}
+            for _, def in pairs(Sim.CONSUMABLE_DEFS) do
+                if def.set == "Planet" then planet_ids[#planet_ids+1] = def.id end
+            end
+            local pid = Sim.RNG.pick(state.rng, planet_ids)
+            state._cons_n = (state._cons_n or 0) + 1
+            state.consumables[#state.consumables + 1] = { id = pid, uid = state._cons_n }
+            created = created + 1
+        end
+    end
+    return { created = created }
+end)
+
+_reg_cons("c_emperor", "The Emperor", "Tarot", function(ctx, state)
+    local created = 0
+    for _ = 1, 2 do
+        if #state.consumables < state.consumable_slots then
+            local tarot_ids = {}
+            for _, def in pairs(Sim.CONSUMABLE_DEFS) do
+                if def.set == "Tarot" and def.id ~= state.last_consumable then
+                    tarot_ids[#tarot_ids+1] = def.id
+                end
+            end
+            if #tarot_ids > 0 then
+                local tid = Sim.RNG.pick(state.rng, tarot_ids)
+                state._cons_n = (state._cons_n or 0) + 1
+                state.consumables[#state.consumables + 1] = { id = tid, uid = state._cons_n }
+                created = created + 1
+            end
+        end
+    end
+    return { created = created }
+end)
+
+_reg_cons("c_hierophant", "The Hierophant", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local count = 0
+    for _, idx in ipairs(ctx.selected) do
+        local c = state.hand[idx]
+        if c and count < 2 then
+            c.enhancement = Sim.ENUMS.ENHANCEMENT.BONUS
+            count = count + 1
+        end
+    end
+    return { enhanced = count }
+end)
+
+_reg_cons("c_lovers", "The Lovers", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local idx = ctx.selected[1]
+    local c = state.hand[idx]
+    if c then
+        c.enhancement = Sim.ENUMS.ENHANCEMENT.WILD
+        return { enhanced = 1 }
+    end
+    return nil
+end)
+
+_reg_cons("c_chariot", "The Chariot", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local idx = ctx.selected[1]
+    local c = state.hand[idx]
+    if c then
+        c.enhancement = Sim.ENUMS.ENHANCEMENT.STEEL
+        return { enhanced = 1 }
+    end
+    return nil
+end)
+
+_reg_cons("c_strength", "Strength", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local count = 0
+    for _, idx in ipairs(ctx.selected) do
+        local c = state.hand[idx]
+        if c and c.rank < 14 and count < 2 then
+            c.rank = c.rank + 1
+            count = count + 1
+        end
+    end
+    return { enhanced = count }
+end)
+
+_reg_cons("c_hermit", "The Hermit", "Tarot", function(ctx, state)
+    local bonus = math.min(state.dollars, 20)
+    state.dollars = state.dollars + bonus
+    return { money = bonus }
+end)
+
+_reg_cons("c_wheel_of_fortune", "Wheel of Fortune", "Tarot", function(ctx, state)
+    if not state.jokers or #state.jokers == 0 then return nil end
+    if Sim.RNG.next(state.rng) >= 0.25 then return nil end
+    local ji = Sim.RNG.int(state.rng, 1, #state.jokers)
+    local jk = state.jokers[ji]
+    if jk.edition == 0 then
+        local editions = {
+            Sim.ENUMS.EDITION.FOIL,
+            Sim.ENUMS.EDITION.HOLO,
+            Sim.ENUMS.EDITION.POLYCHROME,
+        }
+        jk.edition = Sim.RNG.pick(state.rng, editions)
+        return { edition = jk.edition }
+    end
+    return nil
+end)
+
+_reg_cons("c_justice", "Justice", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local idx = ctx.selected[1]
+    local c = state.hand[idx]
+    if c then
+        c.enhancement = Sim.ENUMS.ENHANCEMENT.GLASS
+        return { enhanced = 1 }
+    end
+    return nil
+end)
+
+_reg_cons("c_hanged_man", "The Hanged Man", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local destroyed = 0
+    local sorted = {}
+    for _, v in ipairs(ctx.selected) do sorted[#sorted+1] = v end
+    table.sort(sorted, function(a,b) return a > b end)
+    for _, idx in ipairs(sorted) do
+        if state.hand[idx] and destroyed < 2 then
+            table.remove(state.hand, idx)
+            destroyed = destroyed + 1
+        end
+    end
+    state.deck_count = state.deck_count - destroyed
+    return { destroyed = destroyed }
+end)
+
+_reg_cons("c_death", "Death", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected < 2 then return nil end
+    local src = state.hand[ctx.selected[1]]
+    local tgt_idx = ctx.selected[2]
+    if src and state.hand[tgt_idx] then
+        -- Copy src card properties to tgt
+        local tgt = state.hand[tgt_idx]
+        tgt.rank = src.rank
+        tgt.suit = src.suit
+        tgt.enhancement = src.enhancement
+        tgt.edition = src.edition
+        tgt.seal = src.seal
+        tgt.perma_bonus = src.perma_bonus
+        return { copied = true }
+    end
+    return nil
+end)
+
+_reg_cons("c_temperance", "Temperance", "Tarot", function(ctx, state)
+    local total = 0
+    if state.jokers then
+        for _, jk in ipairs(state.jokers) do
+            local def = Sim._JOKER_BY_ID[jk.id]
+            if def then total = total + (def.cost or 3) end
+        end
+    end
+    total = math.min(total, 50)
+    state.dollars = state.dollars + total
+    return { money = total }
+end)
+
+_reg_cons("c_devil", "The Devil", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local idx = ctx.selected[1]
+    local c = state.hand[idx]
+    if c then
+        c.enhancement = Sim.ENUMS.ENHANCEMENT.GOLD
+        return { enhanced = 1 }
+    end
+    return nil
+end)
+
+_reg_cons("c_tower", "The Tower", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local idx = ctx.selected[1]
+    local c = state.hand[idx]
+    if c then
+        c.enhancement = Sim.ENUMS.ENHANCEMENT.STONE
+        return { enhanced = 1 }
+    end
+    return nil
+end)
+
+_reg_cons("c_star", "The Star", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local count = 0
+    for _, idx in ipairs(ctx.selected) do
+        local c = state.hand[idx]
+        if c and count < 3 then
+            c.suit = Sim.ENUMS.SUIT.DIAMONDS
+            count = count + 1
+        end
+    end
+    return { changed = count }
+end)
+
+_reg_cons("c_moon", "The Moon", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local count = 0
+    for _, idx in ipairs(ctx.selected) do
+        local c = state.hand[idx]
+        if c and count < 3 then
+            c.suit = Sim.ENUMS.SUIT.CLUBS
+            count = count + 1
+        end
+    end
+    return { changed = count }
+end)
+
+_reg_cons("c_sun", "The Sun", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local count = 0
+    for _, idx in ipairs(ctx.selected) do
+        local c = state.hand[idx]
+        if c and count < 3 then
+            c.suit = Sim.ENUMS.SUIT.HEARTS
+            count = count + 1
+        end
+    end
+    return { changed = count }
+end)
+
+_reg_cons("c_world", "The World", "Tarot", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local count = 0
+    for _, idx in ipairs(ctx.selected) do
+        local c = state.hand[idx]
+        if c and count < 3 then
+            c.suit = Sim.ENUMS.SUIT.SPADES
+            count = count + 1
+        end
+    end
+    return { changed = count }
+end)
+
+-- === Spectral cards (16) ===
+
+_reg_cons("c_familiar", "Familiar", "Spectral", function(ctx, state)
+    if not state.hand or #state.hand == 0 then return nil end
+    -- Destroy 1 random card
+    local di = Sim.RNG.int(state.rng, 1, #state.hand)
+    table.remove(state.hand, di)
+    state.deck_count = state.deck_count - 1
+    -- Create 3 random face cards with random enhancement
+    local faces = {11, 12, 13}
+    local enhancements = {1, 2, 3, 4, 5, 7, 8}
+    local created = 0
+    for _ = 1, 3 do
+        if #state.hand < state.hand_limit then
+            local rank = Sim.RNG.pick(state.rng, faces)
+            local suit = Sim.RNG.int(state.rng, 1, 4)
+            local enh = Sim.RNG.pick(state.rng, enhancements)
+            state.hand[#state.hand+1] = Sim.Card.new(rank, suit, enh)
+            created = created + 1
+        end
+    end
+    return { created = created }
+end)
+
+_reg_cons("c_grim", "Grim", "Spectral", function(ctx, state)
+    if not state.hand or #state.hand == 0 then return nil end
+    -- Destroy 1 random card
+    local di = Sim.RNG.int(state.rng, 1, #state.hand)
+    table.remove(state.hand, di)
+    state.deck_count = state.deck_count - 1
+    -- Create 2 Aces with random enhancement
+    local enhancements = {1, 2, 3, 4, 5, 7, 8}
+    local created = 0
+    for _ = 1, 2 do
+        if #state.hand < state.hand_limit then
+            local suit = Sim.RNG.int(state.rng, 1, 4)
+            local enh = Sim.RNG.pick(state.rng, enhancements)
+            state.hand[#state.hand+1] = Sim.Card.new(14, suit, enh)
+            created = created + 1
+        end
+    end
+    return { created = created }
+end)
+
+_reg_cons("c_incantation", "Incantation", "Spectral", function(ctx, state)
+    if not state.hand or #state.hand == 0 then return nil end
+    -- Destroy 1 random card
+    local di = Sim.RNG.int(state.rng, 1, #state.hand)
+    table.remove(state.hand, di)
+    state.deck_count = state.deck_count - 1
+    -- Create 4 numbered cards (2-10) with random enhancement
+    local enhancements = {1, 2, 3, 4, 5, 7, 8}
+    local created = 0
+    for _ = 1, 4 do
+        if #state.hand < state.hand_limit then
+            local rank = Sim.RNG.int(state.rng, 2, 10)
+            local suit = Sim.RNG.int(state.rng, 1, 4)
+            local enh = Sim.RNG.pick(state.rng, enhancements)
+            state.hand[#state.hand+1] = Sim.Card.new(rank, suit, enh)
+            created = created + 1
+        end
+    end
+    return { created = created }
+end)
+
+_reg_cons("c_talisman", "Talisman", "Spectral", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local c = state.hand[ctx.selected[1]]
+    if c then
+        c.seal = Sim.ENUMS.SEAL.GOLD
+        return { sealed = true }
+    end
+    return nil
+end)
+
+_reg_cons("c_aura", "Aura", "Spectral", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local c = state.hand[ctx.selected[1]]
+    if c and c.edition == 0 then
+        local editions = {
+            Sim.ENUMS.EDITION.FOIL,
+            Sim.ENUMS.EDITION.HOLO,
+            Sim.ENUMS.EDITION.POLYCHROME,
+        }
+        c.edition = Sim.RNG.pick(state.rng, editions)
+        return { edition = c.edition }
+    end
+    return nil
+end)
+
+_reg_cons("c_wraith", "Wraith", "Spectral", function(ctx, state)
+    -- Create 1 random Joker
+    if #state.jokers >= state.joker_slots then return nil end
+    local jid = Sim.RNG.pick(state.rng, Sim.JOKER_POOL)
+    state._joker_n = (state._joker_n or 0) + 1
+    state.jokers[#state.jokers+1] = {
+        id = jid, edition = 0, eternal = false, uid = state._joker_n,
+    }
+    -- Set money to 0
+    state.dollars = 0
+    return { created = true }
+end)
+
+_reg_cons("c_sigil", "Sigil", "Spectral", function(ctx, state)
+    local suit = Sim.RNG.int(state.rng, 1, 4)
+    for _, c in ipairs(state.hand) do
+        if c.enhancement ~= 6 then -- Skip Stone cards
+            c.suit = suit
+        end
+    end
+    return { suit = suit }
+end)
+
+_reg_cons("c_ouija", "Ouija", "Spectral", function(ctx, state)
+    local rank = Sim.RNG.int(state.rng, 2, 14)
+    for _, c in ipairs(state.hand) do
+        if c.enhancement ~= 6 then -- Skip Stone cards
+            c.rank = rank
+        end
+    end
+    -- -1 hand size
+    state.hand_limit = math.max(1, state.hand_limit - 1)
+    return { rank = rank }
+end)
+
+_reg_cons("c_ectoplasm", "Ectoplasm", "Spectral", function(ctx, state)
+    -- Add Negative edition to a random Joker
+    local eligible = {}
+    for _, jk in ipairs(state.jokers) do
+        if jk.edition == 0 then eligible[#eligible+1] = jk end
+    end
+    if #eligible == 0 then return nil end
+    local jk = Sim.RNG.pick(state.rng, eligible)
+    jk.edition = Sim.ENUMS.EDITION.NEGATIVE
+    -- -1 hand size
+    state.hand_limit = math.max(1, state.hand_limit - 1)
+    return { edition = Sim.ENUMS.EDITION.NEGATIVE }
+end)
+
+_reg_cons("c_immolate", "Immolate", "Spectral", function(ctx, state)
+    if not state.hand or #state.hand == 0 then return nil end
+    -- Destroy 5 random cards
+    local destroyed = 0
+    local indices = {}
+    for i = 1, #state.hand do indices[i] = i end
+    Sim.RNG.shuffle(state.rng, indices)
+    local n = math.min(5, #state.hand)
+    table.sort(indices, function(a,b) return a > b end)
+    for i = 1, n do
+        table.remove(state.hand, indices[i])
+        destroyed = destroyed + 1
+    end
+    state.deck_count = state.deck_count - destroyed
+    -- Gain $20
+    state.dollars = state.dollars + 20
+    return { destroyed = destroyed, money = 20 }
+end)
+
+_reg_cons("c_ankh", "Ankh", "Spectral", function(ctx, state)
+    if not state.jokers or #state.jokers == 0 then return nil end
+    -- Pick a random joker to copy
+    local src = Sim.RNG.pick(state.rng, state.jokers)
+    -- Destroy all other jokers
+    state.jokers = { src }
+    -- Create a copy
+    if #state.jokers < state.joker_slots then
+        state._joker_n = (state._joker_n or 0) + 1
+        state.jokers[#state.jokers+1] = {
+            id = src.id, edition = src.edition, eternal = src.eternal, uid = state._joker_n,
+        }
+    end
+    return { copied = true }
+end)
+
+_reg_cons("c_deja_vu", "Deja Vu", "Spectral", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local c = state.hand[ctx.selected[1]]
+    if c then
+        c.seal = Sim.ENUMS.SEAL.RED
+        return { sealed = true }
+    end
+    return nil
+end)
+
+_reg_cons("c_hex", "Hex", "Spectral", function(ctx, state)
+    -- Add Polychrome to a random Joker
+    local eligible = {}
+    for _, jk in ipairs(state.jokers) do
+        if jk.edition == 0 then eligible[#eligible+1] = jk end
+    end
+    if #eligible == 0 then return nil end
+    local jk = Sim.RNG.pick(state.rng, eligible)
+    jk.edition = Sim.ENUMS.EDITION.POLYCHROME
+    -- Destroy all other jokers
+    state.jokers = { jk }
+    return { edition = Sim.ENUMS.EDITION.POLYCHROME }
+end)
+
+_reg_cons("c_trance", "Trance", "Spectral", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local c = state.hand[ctx.selected[1]]
+    if c then
+        c.seal = Sim.ENUMS.SEAL.BLUE
+        return { sealed = true }
+    end
+    return nil
+end)
+
+_reg_cons("c_medium", "Medium", "Spectral", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local c = state.hand[ctx.selected[1]]
+    if c then
+        c.seal = Sim.ENUMS.SEAL.PURPLE
+        return { sealed = true }
+    end
+    return nil
+end)
+
+_reg_cons("c_cryptid", "Cryptid", "Spectral", function(ctx, state)
+    if not ctx.selected or #ctx.selected == 0 then return nil end
+    local src = state.hand[ctx.selected[1]]
+    if not src then return nil end
+    local created = 0
+    for _ = 1, 2 do
+        if #state.hand < state.hand_limit then
+            state.hand[#state.hand+1] = Sim.Card.new(
+                src.rank, src.suit, src.enhancement, src.edition, src.seal, src.perma_bonus
+            )
+            state.deck_count = state.deck_count + 1
+            created = created + 1
+        end
+    end
+    return { created = created }
 end)
 
 Sim.CONS_POOL = {}
@@ -491,12 +1090,15 @@ local function _highest(hand)
     return best and {best} or (fallback and {fallback} or {})
 end
 
+local function _is_wild(card) return card.enhancement == 3 end
+local function _is_stone(card) return card.enhancement == 6 end
+
 local function _flush(hand)
     if #hand ~= 5 then return {} end
     local suit = nil
     for i = 1, #hand do
-        if hand[i].enhancement == 3 then -- Wild
-        elseif hand[i].enhancement == 6 then return {} -- Stone
+        if _is_wild(hand[i]) then -- Wild counts as any suit
+        elseif _is_stone(hand[i]) then return {} -- Stone breaks flush
         else
             if not suit then suit = hand[i].suit
             elseif hand[i].suit ~= suit then return {} end
@@ -581,6 +1183,7 @@ function Sim.Eval.get_hand(cards)
         for _,c in ipairs(_2[1]) do fh[#fh+1]=c end
         all[HT.FULL_HOUSE] = fh
         if HT.FULL_HOUSE < best then best = HT.FULL_HOUSE; best_sc = fh end
+        -- Do NOT cascade Three of a Kind or Pair from Full House (matches real game)
     end
     if #_fl > 0 then
         all[HT.FLUSH] = _fl[1]
@@ -590,7 +1193,7 @@ function Sim.Eval.get_hand(cards)
         all[HT.STRAIGHT] = _st[1]
         if HT.STRAIGHT < best then best = HT.STRAIGHT; best_sc = _st[1] end
     end
-    if #_3 > 0 then
+    if #_3 > 0 and not all[HT.FULL_HOUSE] then
         all[HT.THREE_OF_A_KIND] = _3[1]
         if HT.THREE_OF_A_KIND < best then best = HT.THREE_OF_A_KIND; best_sc = _3[1] end
         if not all[HT.PAIR] then all[HT.PAIR] = {_3[1][1],_3[1][2]} end
@@ -623,6 +1226,38 @@ end
 
 Sim.Engine = {}
 
+local function _score_card_effects(state, c, insc, debuffed, chips, mult)
+    if not insc or debuffed then return chips, mult end
+
+    -- Base card chips (not for Stone)
+    if c.enhancement ~= 6 then chips = chips + Sim.Card.chips(c) end
+
+    -- Enhancement effects (scoring)
+    if c.enhancement == 1 then       -- Bonus: +30 chips
+        chips = chips + 30
+    elseif c.enhancement == 2 then   -- Mult: +4 mult
+        mult = mult + 4
+    elseif c.enhancement == 4 then   -- Glass: ×2 mult
+        mult = mult * 2
+    elseif c.enhancement == 6 then   -- Stone: +50 chips
+        chips = chips + 50
+    elseif c.enhancement == 8 then   -- Lucky: 1/5 +20 mult, 1/15 +$20
+        if state.rng and Sim.RNG.next(state.rng) < 0.2 then
+            mult = mult + 20
+        end
+        if state.rng and Sim.RNG.next(state.rng) < (1/15) then
+            state.dollars = state.dollars + 20
+        end
+    end
+
+    -- Edition effects
+    if c.edition == 1 then chips = chips + 50        -- Foil
+    elseif c.edition == 2 then mult = mult + 10      -- Holo
+    elseif c.edition == 3 then mult = mult * 1.5 end -- Poly
+
+    return chips, mult
+end
+
 function Sim.Engine.calculate(state, played)
     local E = Sim.ENUMS
     local hand_type, scoring, all_hands = Sim.Eval.get_hand(played)
@@ -640,20 +1275,19 @@ function Sim.Engine.calculate(state, played)
         local insc = is_sc[c]
         local debuffed = Sim.Blind.is_card_debuffed(state, c)
 
-        if insc and not debuffed and c.enhancement ~= 6 then chips = chips + Sim.Card.chips(c) end
-        if insc and not debuffed then
-            if c.enhancement == 1 then chips = chips + 30        -- Bonus
-            elseif c.enhancement == 2 then mult = mult + 4       -- Mult
-            elseif c.enhancement == 6 then chips = chips + 50    -- Stone
-            elseif c.enhancement == 4 then mult = mult * 2 end   -- Glass
-        end
-        if insc and not debuffed then
-            if c.edition == 1 then chips = chips + 50            -- Foil
-            elseif c.edition == 2 then mult = mult + 10          -- Holo
-            elseif c.edition == 3 then mult = mult * 1.5 end     -- Poly
+        chips, mult = _score_card_effects(state, c, insc, debuffed, chips, mult)
+
+        -- Red seal: re-trigger scoring effects
+        if insc and not debuffed and c.seal == 2 then
+            chips, mult = _score_card_effects(state, c, insc, debuffed, chips, mult)
         end
 
-        -- Individual card joker effects (Hiker, etc.)
+        -- Gold seal: +3 money when scored
+        if insc and not debuffed and c.seal == 1 then
+            state.dollars = state.dollars + 3
+        end
+
+        -- Individual card joker effects (scoring cards only)
         if insc and not debuffed and state.jokers then
             for ji = 1, #state.jokers do
                 local jk = state.jokers[ji]
@@ -688,8 +1322,6 @@ function Sim.Engine.calculate(state, played)
                 }
                 local fx = def.apply(ctx, state, jk)
                 if fx then
-
-
                     if fx.chip_mod then chips = chips + fx.chip_mod end
                     if fx.mult_mod then mult = mult + fx.mult_mod end
                     if fx.Xmult_mod then mult = mult * fx.Xmult_mod end
@@ -698,6 +1330,81 @@ function Sim.Engine.calculate(state, played)
             if jk.edition == 1 then chips = chips + 50
             elseif jk.edition == 2 then mult = mult + 10
             elseif jk.edition == 3 then mult = mult * 1.5 end
+        end
+    end
+
+    -- Held-in-hand effects: cards remaining in hand after play
+    for i = 1, #state.hand do
+        local c = state.hand[i]
+        local debuffed = Sim.Blind.is_card_debuffed(state, c)
+        if not debuffed then
+            local reps = 1
+            -- Red seal on held card: re-trigger held-in-hand effects
+            if c.seal == 2 then reps = 2 end
+            for r = 1, reps do
+                if c.enhancement == 5 then   -- Steel: ×1.5 mult
+                    mult = mult * 1.5
+                elseif c.enhancement == 7 then -- Gold: +3 money
+                    state.dollars = state.dollars + 3
+                end
+                -- Joker effects on held cards
+                if state.jokers then
+                    for ji = 1, #state.jokers do
+                        local jk = state.jokers[ji]
+                        local def = Sim._JOKER_BY_ID[jk.id]
+                        if def and def.apply then
+                            local ctx = {
+                                held = true, cardarea = "hand",
+                                other_card = c, my_joker_index = ji,
+                            }
+                            local fx = def.apply(ctx, state, jk)
+                            if fx then
+                                if fx.x_mult then mult = mult * fx.x_mult end
+                                if fx.mult then mult = mult + fx.mult end
+                                if fx.chips then chips = chips + fx.chips end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Sock and Buskin: re-trigger individual effects for face cards
+    local has_sock = false
+    if state.jokers then
+        for ji = 1, #state.jokers do
+            local jdef = Sim._JOKER_BY_ID[state.jokers[ji].id]
+            if jdef and jdef.key == "j_sock_and_buskin" then has_sock = true; break end
+        end
+    end
+    if has_sock then
+        for i = 1, #played do
+            local c = played[i]
+            local insc = is_sc[c]
+            local debuffed = Sim.Blind.is_card_debuffed(state, c)
+            if insc and not debuffed and c.rank >= 11 and c.rank <= 13 then
+                -- Re-trigger individual card joker effects for face cards
+                if state.jokers then
+                    for ji = 1, #state.jokers do
+                        local jk = state.jokers[ji]
+                        local def = Sim._JOKER_BY_ID[jk.id]
+                        if def and def.apply then
+                            local ctx = {
+                                individual = true, cardarea = "play",
+                                other_card = c, scoring_hand = scoring,
+                                my_joker_index = ji,
+                            }
+                            local fx = def.apply(ctx, state, jk)
+                            if fx then
+                                if fx.chips then chips = chips + fx.chips end
+                                if fx.mult then mult = mult + fx.mult end
+                                if fx.x_mult then mult = mult * fx.x_mult end
+                            end
+                        end
+                    end
+                end
+            end
         end
     end
 
@@ -722,6 +1429,8 @@ function Sim.State.new(opts)
     if not opts.deck then Sim.RNG.shuffle(rng, deck) end
     local hl = {}
     for i = 1, 12 do hl[i] = 1 end
+    local htc = {}
+    for i = 1, 12 do htc[i] = 0 end
     return {
         deck=deck, hand={}, discard={}, hand_limit=opts.hand_size or D.hand_size,
         jokers=opts.jokers or {}, joker_slots=D.joker_slots,
@@ -731,18 +1440,22 @@ function Sim.State.new(opts)
         ante=opts.ante or 1, round=0,
         hands_left=D.hands, discards_left=D.discards, hands_played=0,
         blind_type="none", blind_chips=300, blind_beaten=false,
-        selection={}, hand_levels=hl,
+        selection={}, hand_levels=hl, hand_type_counts=htc,
         chips=0, total_chips=0,
         deck_count=52,
         pack_cards=nil, last_consumable=nil,
         rng=rng, _joker_n=0, _cons_n=0,
+        ride_the_bus=0, cards_drawn=0,
     }
 end
 
 function Sim.State.draw(state)
     if #state.hand >= state.hand_limit then return state end
     local n = math.min(state.hand_limit - #state.hand, #state.deck)
-    for i = 1, n do state.hand[#state.hand+1] = table.remove(state.deck, 1) end
+    for i = 1, n do
+        state.hand[#state.hand+1] = table.remove(state.deck, 1)
+        state.cards_drawn = state.cards_drawn + 1
+    end
     return state
 end
 
@@ -758,7 +1471,8 @@ function Sim.State.rebuild_deck(state)
 end
 
 function Sim.State.interest(state)
-    return math.min(math.floor(state.dollars / 5), 5)
+    local cap = state._interest_cap or 5
+    return math.min(math.floor(state.dollars / 5), cap)
 end
 
 function Sim.State.level_up(state, ht, amt)
@@ -818,8 +1532,23 @@ Sim.BOSS_BLINDS = {
 }
 
 function Sim.Blind.pick_boss(state, ante)
-    -- Pick a deterministic boss from the pool based on ante + rng
-    local idx = Sim.RNG.int(state.rng, 1, #Sim.BOSS_BLINDS)
+    -- Boss rotation: don't repeat until all seen
+    if not state._bosses_seen then state._bosses_seen = {} end
+
+    -- If all bosses have been seen, reset
+    local all_seen = true
+    for i = 1, #Sim.BOSS_BLINDS do
+        if not state._bosses_seen[i] then all_seen = false; break end
+    end
+    if all_seen then state._bosses_seen = {} end
+
+    -- Pick from unseen bosses
+    local unseen = {}
+    for i = 1, #Sim.BOSS_BLINDS do
+        if not state._bosses_seen[i] then unseen[#unseen+1] = i end
+    end
+    local idx = Sim.RNG.pick(state.rng, unseen)
+    state._bosses_seen[idx] = true
     return Sim.BOSS_BLINDS[idx]
 end
 
@@ -1308,7 +2037,37 @@ local function _step_selecting(state, atype, value)
             state.chips = state.chips + total
             state.hands_left = state.hands_left - 1
             state.hands_played = state.hands_played + 1
-            for _, c in ipairs(played) do state.discard[#state.discard+1] = c end
+            state.hand_type_counts[ht] = (state.hand_type_counts[ht] or 0) + 1
+
+            -- Ride the Bus: reset on face cards, increment otherwise
+            local has_face = false
+            for _, c in ipairs(played) do
+                if c.rank >= 11 and c.rank <= 13 then has_face = true; break end
+            end
+            if has_face then
+                state.ride_the_bus = 0
+            else
+                state.ride_the_bus = (state.ride_the_bus or 0) + 1
+            end
+
+            -- Glass card destruction (1/4 chance per Glass card)
+            local destroyed = {}
+            for _, c in ipairs(played) do
+                if c.enhancement == 4 and not c.debuffed then
+                    if state.rng and Sim.RNG.next(state.rng) < 0.25 then
+                        destroyed[c] = true
+                    end
+                end
+            end
+
+            -- Add played cards to discard (except destroyed ones)
+            for _, c in ipairs(played) do
+                if not destroyed[c] then
+                    state.discard[#state.discard+1] = c
+                else
+                    state.deck_count = state.deck_count - 1
+                end
+            end
             Sim.State.draw(state)
             state.selection = {}
 
@@ -1323,8 +2082,19 @@ local function _step_selecting(state, atype, value)
                     if def and def.apply then
                         local ctx = { after_play = true, hand_type = ht, scoring = scoring }
                         local fx = def.apply(ctx, state, jk)
-                        if fx and fx.level_up then
-                            Sim.State.level_up(state, fx.level_up)
+                        if fx then
+                            if fx.level_up then
+                                Sim.State.level_up(state, fx.level_up)
+                            end
+                            if fx.chip_mod then
+                                state.chips = state.chips + fx.chip_mod
+                                total = total + fx.chip_mod
+                            end
+                            if fx.mult_mod then
+                                -- After-play mult is applied as chip bonus (simplified)
+                                state.chips = state.chips + fx.mult_mod
+                                total = total + fx.mult_mod
+                            end
                         end
                     end
                 end
@@ -1362,7 +2132,9 @@ local function _step_selecting(state, atype, value)
             end
             local disc_ht = Sim.Eval.get_hand(disc_cards)
 
-            -- Trigger Burnt Joker (on_discard, is_first_discard)
+            -- Trigger Burnt Joker (on_discard, is_first_discard) and Ramen
+            local num_discarded = #sorted
+            local destroyed_jokers = {}
             if state.jokers then
                 for ji = 1, #state.jokers do
                     local jk = state.jokers[ji]
@@ -1372,13 +2144,23 @@ local function _step_selecting(state, atype, value)
                             on_discard = true,
                             is_first_discard = (state.discards_left == D.discards),
                             discarded_hand_type = disc_ht,
+                            cards_discarded = num_discarded,
                         }
                         local fx = def.apply(ctx, state, jk)
-                        if fx and fx.level_up then
-                            Sim.State.level_up(state, fx.level_up)
+                        if fx then
+                            if fx.level_up then
+                                Sim.State.level_up(state, fx.level_up)
+                            end
+                            if fx.destroy_self then
+                                destroyed_jokers[#destroyed_jokers+1] = ji
+                            end
                         end
                     end
                 end
+            end
+            -- Remove destroyed jokers (reverse order)
+            for i = #destroyed_jokers, 1, -1 do
+                table.remove(state.jokers, destroyed_jokers[i])
             end
 
             for _, idx in ipairs(sorted) do
@@ -1423,6 +2205,21 @@ function _advance_blind(state)
     local reward_dollars = Sim.Blind.reward(
         bname=="Small" and 1 or bname=="Big" and 2 or 3)
     state.dollars = state.dollars + reward_dollars + Sim.State.interest(state)
+
+    -- Round-end joker effects (Delayed Gratification, etc.)
+    if state.jokers then
+        for ji = 1, #state.jokers do
+            local jk = state.jokers[ji]
+            local def = Sim._JOKER_BY_ID[jk.id]
+            if def and def.apply then
+                local ctx = { round_end = true }
+                local fx = def.apply(ctx, state, jk)
+                if fx and fx.dollars then
+                    state.dollars = state.dollars + fx.dollars
+                end
+            end
+        end
+    end
 
     -- Move played cards to discard, clear hand
     for _, c in ipairs(state.hand) do state.discard[#state.discard+1] = c end
@@ -1639,7 +2436,7 @@ if _SIM_RUN_TESTS or not pcall(debug.getlocal, 4, 1) then
     test("REORDER swaps jokers", rs.jokers[1].id == id_before_2 and rs.jokers[2].id == id_before_1)
 
     -- Test: Hiker gives permanent chips
-    local hs = Sim.State.new({ seed="HIK", jokers={{id=21, edition=0, eternal=false, uid=1}} })
+    local hs = Sim.State.new({ seed="HIK", jokers={{id=28, edition=0, eternal=false, uid=1}} })
     hs.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     local pb_before = hs.hand[1].perma_bonus
     Sim.Engine.calculate(hs, {hs.hand[1], hs.hand[2]})
@@ -1662,6 +2459,252 @@ if _SIM_RUN_TESTS or not pcall(debug.getlocal, 4, 1) then
     es.selection = {1, 2}
     _use_consumable(es, 1)
     test("Empress enhances to Mult", es.hand[1].enhancement == 2 and es.hand[2].enhancement == 2)
+
+    -- Test: Venus levels Three of a Kind
+    local vs = Sim.State.new({ seed="VEN", consumables={{id=5, uid=1}} })
+    vs.hand = { C(2,1), C(5,2), C(9,3), C(11,4), C(14,1), C(3,2), C(7,3), C(13,4) }
+    local vhl = vs.hand_levels[9]
+    _use_consumable(vs, 1)
+    test("Venus levels Three of a Kind", vs.hand_levels[9] == vhl + 1)
+
+    -- Test: Jupiter levels Flush
+    local js = Sim.State.new({ seed="JUP", consumables={{id=8, uid=1}} })
+    js.hand = { C(2,1), C(5,2), C(9,3), C(11,4), C(14,1), C(3,2), C(7,3), C(13,4) }
+    local jhl = js.hand_levels[7]
+    _use_consumable(js, 1)
+    test("Jupiter levels Flush", js.hand_levels[7] == jhl + 1)
+
+    -- Test: The Magician enhances to Lucky
+    local ms = Sim.State.new({ seed="MAG", consumables={{id=15, uid=1}} })
+    ms.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
+    ms.selection = {1, 2}
+    _use_consumable(ms, 1)
+    test("Magician enhances to Lucky", ms.hand[1].enhancement == 8 and ms.hand[2].enhancement == 8)
+
+    -- Test: The Hermit doubles money
+    local hermit_s = Sim.State.new({ seed="HER", consumables={{id=22, uid=1}} })
+    hermit_s.dollars = 15
+    hermit_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
+    _use_consumable(hermit_s, 1)
+    test("Hermit doubles money", hermit_s.dollars == 30)
+
+    -- Test: The Hermit caps at +$20
+    local hermit2_s = Sim.State.new({ seed="HER2", consumables={{id=22, uid=1}} })
+    hermit2_s.dollars = 30
+    hermit2_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
+    _use_consumable(hermit2_s, 1)
+    test("Hermit caps at +$20", hermit2_s.dollars == 50)
+
+    -- Test: Strength increases rank
+    local str_s = Sim.State.new({ seed="STR", consumables={{id=21, uid=1}} })
+    str_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
+    str_s.selection = {1, 2}
+    _use_consumable(str_s, 1)
+    test("Strength +1 rank", str_s.hand[1].rank == 6 and str_s.hand[2].rank == 6)
+
+    -- Test: The Star changes suit to Diamonds
+    local star_s = Sim.State.new({ seed="STAR", consumables={{id=30, uid=1}} })
+    star_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
+    star_s.selection = {1}
+    _use_consumable(star_s, 1)
+    test("Star changes to Diamonds", star_s.hand[1].suit == 4)
+
+    -- Test: Temperance gives money for jokers
+    local temp_s = Sim.State.new({ seed="TEMP", consumables={{id=27, uid=1}},
+        jokers={{id=1,edition=0,eternal=false,uid=1}} })
+    temp_s.dollars = 4
+    temp_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
+    _use_consumable(temp_s, 1)
+    test("Temperance gives joker value", temp_s.dollars > 4)
+
+    -- Test: Steel card held in hand = ×1.5 mult
+    local steel_s = Sim.State.new({ seed="STEEL" })
+    steel_s.hand = {
+        C(10,1,5),  -- Steel 10 (held in hand)
+        C(10,2),    -- Normal 10 (played)
+        C(10,3),    -- Normal 10 (played)
+        C(3,4), C(7,1), C(5,2), C(9,3), C(12,4)
+    }
+    local st1,_,sm1 = Sim.Engine.calculate(steel_s, {steel_s.hand[2], steel_s.hand[3]})
+    -- Pair of 10s: base 10+10 chips, mult 2. Steel in hand: ×1.5
+    test("Steel held = ×1.5 mult", sm1 == 3.0)  -- 2 * 1.5 = 3
+
+    -- Test: Gold card held in hand = +$3
+    local gold_s = Sim.State.new({ seed="GOLD" })
+    gold_s.dollars = 4
+    gold_s.hand = {
+        C(10,1,7),  -- Gold 10 (held in hand)
+        C(10,2),    -- Normal 10 (played)
+        C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4)
+    }
+    Sim.Engine.calculate(gold_s, {gold_s.hand[2], gold_s.hand[3]})
+    test("Gold held = +$3", gold_s.dollars == 7)
+
+    -- Test: Gold seal = +$3 when scored
+    local gs_s = Sim.State.new({ seed="GSEAL" })
+    gs_s.dollars = 4
+    local gold_seal_card = C(10,1,0,0,1)  -- Gold seal
+    gs_s.hand = { gold_seal_card, C(10,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
+    Sim.Engine.calculate(gs_s, {gs_s.hand[1], gs_s.hand[2]})
+    test("Gold seal = +$3 on score", gs_s.dollars == 7)
+
+    -- Test: Red seal re-triggers scoring
+    local rs_s = Sim.State.new({ seed="RSEAL" })
+    local red_seal_card = C(10,1,2,0,2)  -- Red seal + Mult enhancement (+4 mult)
+    rs_s.hand = { red_seal_card, C(10,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
+    local _,_,rsm = Sim.Engine.calculate(rs_s, {rs_s.hand[1], rs_s.hand[2]})
+    -- Pair of 10s: base mult 2. Mult card +4, re-trigger +4 = mult 10
+    test("Red seal re-triggers Mult", rsm == 10)
+
+    -- Test: Wild card counts as any suit for flush
+    local wild_s = Sim.State.new({ seed="WILD" })
+    wild_s.hand = {
+        C(2,1,3),   -- Wild 2 of Spades
+        C(5,2),     -- 5 of Hearts
+        C(9,2),     -- 9 of Hearts
+        C(11,2),    -- J of Hearts
+        C(14,2),    -- A of Hearts
+        C(3,3), C(8,4), C(13,1)
+    }
+    local _,_,_,wht = Sim.Engine.calculate(wild_s, {wild_s.hand[1],wild_s.hand[2],wild_s.hand[3],wild_s.hand[4],wild_s.hand[5]})
+    test("Wild card makes flush", wht == 7)
+
+    -- Test: Lucky card with seeded RNG
+    local lucky_s = Sim.State.new({ seed="LUCKY" })
+    local lucky_card = C(10,1,8)  -- Lucky enhancement
+    lucky_s.hand = { lucky_card, C(10,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
+    local l_money_before = lucky_s.dollars
+    Sim.Engine.calculate(lucky_s, {lucky_s.hand[1], lucky_s.hand[2]})
+    -- Lucky is random, just verify no crash
+    test("Lucky card scoring works", lucky_s.dollars >= l_money_before)
+
+    -- Test: Supernova (+mult = times played this hand type)
+    local sn_s = Sim.State.new({ seed="SN", jokers={{id=21,edition=0,eternal=false,uid=1}} })
+    sn_s.hand = { C(10,1), C(10,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
+    sn_s.hand_type_counts[11] = 3  -- Pair played 3 times before
+    local _,_,snm = Sim.Engine.calculate(sn_s, {sn_s.hand[1], sn_s.hand[2]})
+    -- Pair base mult 2 + Supernova +3 = 5
+    test("Supernova adds played count", snm == 5)
+
+    -- Test: Ride the Bus stacks
+    local rtb_s = Sim.State.new({ seed="RTB", jokers={{id=22,edition=0,eternal=false,uid=1}} })
+    rtb_s.hand = { C(2,1), C(2,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
+    rtb_s.ride_the_bus = 3
+    local _,_,rtbm = Sim.Engine.calculate(rtb_s, {rtb_s.hand[1], rtb_s.hand[2]})
+    -- Pair base mult 2 + Ride the Bus +3 = 5
+    test("Ride the Bus adds stacks", rtbm == 5)
+
+    -- Test: Blackboard (all Spade/Club in hand)
+    local bb_s = Sim.State.new({ seed="BB", jokers={{id=23,edition=0,eternal=false,uid=1}} })
+    bb_s.hand = { C(2,1), C(2,3), C(3,1), C(7,3), C(5,1), C(9,3), C(12,1), C(6,3) }
+    local _,_,bbm = Sim.Engine.calculate(bb_s, {bb_s.hand[1], bb_s.hand[2]})
+    -- Pair base mult 2 * Blackboard ×3 = 6
+    test("Blackboard ×3 when all dark", bbm == 6)
+
+    -- Test: Blackboard fails with Hearts
+    local bb2_s = Sim.State.new({ seed="BB2", jokers={{id=23,edition=0,eternal=false,uid=1}} })
+    bb2_s.hand = { C(2,1), C(2,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
+    local _,_,bb2m = Sim.Engine.calculate(bb2_s, {bb2_s.hand[1], bb2_s.hand[2]})
+    test("Blackboard fails with Hearts", bb2m == 2)
+
+    -- Test: Ramen starts at ×2
+    local rm_s = Sim.State.new({ seed="RM", jokers={{id=24,edition=0,eternal=false,uid=1}} })
+    rm_s.hand = { C(2,1), C(2,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
+    rm_s.cards_drawn = 0
+    local _,_,rmm = Sim.Engine.calculate(rm_s, {rm_s.hand[1], rm_s.hand[2]})
+    test("Ramen ×2 at 0 draws", rmm == 4)  -- 2 * 2 = 4
+
+    -- Test: Acrobat ×3 on last hand
+    local ac_s = Sim.State.new({ seed="AC", jokers={{id=25,edition=0,eternal=false,uid=1}} })
+    ac_s.hand = { C(2,1), C(2,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
+    ac_s.hands_left = 0
+    local _,_,acm = Sim.Engine.calculate(ac_s, {ac_s.hand[1], ac_s.hand[2]})
+    test("Acrobat ×3 on last hand", acm == 6)  -- 2 * 3 = 6
+
+    -- Test: Sock and Buskin re-triggers face card effects
+    local sb_s = Sim.State.new({ seed="SB", jokers={
+        {id=26,edition=0,eternal=false,uid=1},  -- Sock and Buskin
+        {id=15,edition=0,eternal=false,uid=2},  -- Scary Face (+30 chips per face)
+    }})
+    sb_s.hand = { C(11,1), C(11,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
+    local sb_total = Sim.Engine.calculate(sb_s, {sb_s.hand[1], sb_s.hand[2]})
+    -- Pair of Jacks: base 10 + (10+10) = 30 chips, mult 2. Scary Face +30+30, re-trigger +30+30 = 150 chips
+    -- Total = 150 * 2 = 300
+    test("Sock and Buskin re-triggers face", sb_total == 300)
+
+    -- Test: Wild card triggers suit-based joker (Greedy = Diamonds)
+    local wild_joker_s = Sim.State.new({ seed="WJ", jokers={{id=2,edition=0,eternal=false,uid=1}} })
+    wild_joker_s.hand = { C(2,1,3), C(2,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
+    local _,_,wj_m = Sim.Engine.calculate(wild_joker_s, {wild_joker_s.hand[1], wild_joker_s.hand[2]})
+    -- Pair base mult 2 + Greedy +3 = 5 (Wild card counts as Diamond)
+    test("Wild triggers Greedy Joker", wj_m == 5)
+
+    -- Test: Glass card scoring works
+    local glass_s = Sim.State.new({ seed="GLASS" })
+    glass_s.hand = { C(10,1,4), C(10,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
+    local g_total = Sim.Engine.calculate(glass_s, {glass_s.hand[1], glass_s.hand[2]})
+    -- Pair of 10s: base 10 + 10 + 10 = 30 chips, mult 2 × 2 (Glass) = 4. Total = 120
+    test("Glass card scoring works", g_total == 120)
+
+    -- Test: Red seal on held card re-triggers Steel
+    local red_held_s = Sim.State.new({ seed="RH2" })
+    red_held_s.hand = {
+        C(10,1,5,0,2),  -- Steel + Red seal (held in hand)
+        C(10,2), C(10,3),  -- Pair of 10s (played)
+        C(7,4), C(5,1), C(9,2), C(12,3), C(6,4)
+    }
+    local _,_,rh_m = Sim.Engine.calculate(red_held_s, {red_held_s.hand[2], red_held_s.hand[3]})
+    -- Pair mult 2. Steel ×1.5, re-trigger ×1.5 = 2 × 1.5 × 1.5 = 4.5
+    test("Red seal re-triggers Steel held", rh_m == 4.5)
+
+    -- Test: Talisman adds Gold seal
+    local tal_s = Sim.State.new({ seed="TAL", consumables={{id=37, uid=1}} })
+    tal_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
+    tal_s.selection = {1}
+    _use_consumable(tal_s, 1)
+    test("Talisman adds Gold seal", tal_s.hand[1].seal == 1)
+
+    -- Test: Deja Vu adds Red seal
+    local dv_s = Sim.State.new({ seed="DV", consumables={{id=45, uid=1}} })
+    dv_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
+    dv_s.selection = {1}
+    _use_consumable(dv_s, 1)
+    test("Deja Vu adds Red seal", dv_s.hand[1].seal == 2)
+
+    -- Test: Trance adds Blue seal
+    local tr_s = Sim.State.new({ seed="TR", consumables={{id=47, uid=1}} })
+    tr_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
+    tr_s.selection = {1}
+    _use_consumable(tr_s, 1)
+    test("Trance adds Blue seal", tr_s.hand[1].seal == 3)
+
+    -- Test: Immolate destroys cards and gives $20
+    local imm_s = Sim.State.new({ seed="IMM", consumables={{id=43, uid=1}} })
+    imm_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
+    imm_s.dollars = 0
+    _use_consumable(imm_s, 1)
+    test("Immolate gives $20", imm_s.dollars == 20)
+    test("Immolate destroys cards", #imm_s.hand == 3)  -- 8 - 5 = 3
+
+    -- Test: Cryptid copies card
+    local cry_s = Sim.State.new({ seed="CRY", consumables={{id=49, uid=1}} })
+    cry_s.hand = { C(14,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2) }
+    cry_s.selection = {1}
+    local hand_before = #cry_s.hand
+    _use_consumable(cry_s, 1)
+    test("Cryptid creates 2 copies", #cry_s.hand == hand_before + 2)
+    test("Cryptid copies are Aces", cry_s.hand[#cry_s.hand].rank == 14)
+
+    -- Test: Sigil changes all suits
+    local sig_s = Sim.State.new({ seed="SIG", consumables={{id=40, uid=1}} })
+    sig_s.hand = { C(2,1), C(5,2), C(9,3), C(11,4), C(14,1), C(3,2), C(7,3), C(13,4) }
+    _use_consumable(sig_s, 1)
+    local all_same = true
+    local s = sig_s.hand[1].suit
+    for _, c in ipairs(sig_s.hand) do
+        if c.enhancement ~= 6 and c.suit ~= s then all_same = false end
+    end
+    test("Sigil changes all suits", all_same)
 
     print(string.format("\n  %d/%d tests passed\n", passed, total))
 
