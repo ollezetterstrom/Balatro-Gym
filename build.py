@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-build.py — Split balatro_sim.lua into src/*.lua modules, or reassemble them.
+build.py — Assemble src/*.lua modules into a standalone balatro_sim.lua.
 
 Usage:
-    python build.py split     — Split monolith into src/*.lua
-    python build.py merge     — Merge src/*.lua into balatro_sim.lua
-    python build.py           — Same as merge (default)
+    python build.py           — Merge src/*.lua into balatro_sim.lua (default)
+    python build.py merge     — Same as above
+    python build.py check     — Verify all src files exist and load order is correct
 """
 
 import sys
@@ -15,97 +15,96 @@ ROOT = Path(__file__).parent
 SRC = ROOT / "src"
 MONOLITH = ROOT / "balatro_sim.lua"
 
-# (filename, start_line_1indexed, end_line_1inclusive, description)
-# Hard-coded from SECTION comments. Run `grep -n "SECTION" balatro_sim.lua` to update.
+# Load order matters — must match the dofile chain in balatro_sim.lua
 MODULES = [
-    ("00_header",      1,    34,  "Header + Sim = {}"),
-    ("01_enums",       35,   113, "Enums, HAND_BASE, DEFAULTS"),
-    ("02_rng",         114,  147, "Deterministic LCG"),
-    ("03_cards",       148,  181, "Card constructor, deck, chips"),
-    ("04_jokers",      182,  349, "Joker definitions (all)"),
-    ("05_consumables", 350,  444, "Consumables, pool, advanced jokers"),
-    ("06_evaluator",   445,  604, "Poker hand evaluator"),
-    ("07_engine",      605,  692, "Scoring engine"),
-    ("08_state",       693,  775, "Game state, draw, discard, joker ops"),
-    ("09_blinds",      776,  895, "Blind system, boss blinds"),
-    ("10_shop",        896,  1011,"Shop, economy, packs"),
-    ("11_observation", 1012, 1157,"Observation encoder"),
-    ("12_env",         1158, 1532,"Gymnasium env (reset/step/handlers)"),
-    ("13_test",        1533, 1762,"Self-tests, random agent, return Sim"),
+    "00_header.lua",
+    "01_enums.lua",
+    "02_rng.lua",
+    "03_cards.lua",
+    "04_jokers.lua",
+    "05_consumables.lua",
+    "06_evaluator.lua",
+    "07_engine.lua",
+    "08_state.lua",
+    "09_blinds.lua",
+    "10_shop.lua",
+    "11_observation.lua",
+    "12_env.lua",
+    "13_test.lua",
 ]
 
 
-def split():
-    """Split balatro_sim.lua into src/*.lua files."""
-    SRC.mkdir(exist_ok=True)
-
-    with open(MONOLITH, "r") as f:
-        all_lines = f.readlines()
-
-    for name, start, end, desc in MODULES:
-        # Convert to 0-indexed, end is inclusive
-        chunk = all_lines[start - 1 : end]
-        header = f"-- src/{name}.lua — {desc}\n-- Auto-split. Edit freely.\n\n"
-        outpath = SRC / f"{name}.lua"
-        with open(outpath, "w") as f:
-            f.write(header + "".join(chunk))
-        print(f"  {name}.lua  ({len(chunk)} lines)")
-
-    # Write loader
-    lines = [
-        "-- balatro_sim.lua — Development loader",
-        "-- Loads all src/*.lua in order. For distribution: python build.py",
-        "",
-        'local dir = debug.getinfo(1,"S").source:match("@?(.*/)") or "./"',
-        'package.path = dir.."src/?.lua;"..package.path',
-        "",
-    ]
-    for name, _, _, _ in MODULES:
-        if name == "00_header":
-            lines.append(f"local Sim = dofile(dir..'src/{name}.lua')")
-        elif name == "13_test":
-            lines.append(f"dofile(dir..'src/{name}.lua')  -- runs tests")
-        else:
-            lines.append(f"dofile(dir..'src/{name}.lua')")
-    lines.append("")
-    lines.append("return Sim")
-    lines.append("")
-
-    with open(ROOT / "balatro_sim_dev.lua", "w") as f:
-        f.write("\n".join(lines))
-    print(f"\n  balatro_sim_dev.lua (loader)")
-
-    print(f"\nSplit {len(MODULES)} modules into src/")
-
-
 def merge():
-    """Merge src/*.lua back into balatro_sim.lua."""
+    """Merge src/*.lua into a standalone balatro_sim.lua."""
     if not SRC.exists():
-        print("src/ not found. Run: python build.py split")
+        print("src/ not found. Nothing to merge.")
         sys.exit(1)
 
-    files = sorted(SRC.glob("*.lua"))
     chunks = []
-    for f in files:
-        with open(f) as fh:
+    total_lines = 0
+    for name in MODULES:
+        fpath = SRC / name
+        if not fpath.exists():
+            print(f"  MISSING: {name}")
+            sys.exit(1)
+        with open(fpath) as fh:
             content = fh.read()
-        # Strip auto-split header
+        # Strip the first line header comment (-- src/NN_name.lua — ...)
         lines = content.split("\n")
-        skip = 0
-        for line in lines:
-            if line.startswith("-- src/") or line.startswith("-- Auto-split"):
-                skip += 1
-            else:
-                break
-        chunks.append("\n".join(lines[skip:]))
+        if lines and lines[0].startswith("-- src/"):
+            lines = lines[1:]
+        stripped = "\n".join(lines)
+        chunks.append(stripped)
+        total_lines += stripped.count("\n") + 1
 
-    merged = "\n".join(chunks)
+    header = """\
+--[[
+    balatro_sim.lua — Headless Balatro Simulation Engine v3
+
+    Merged build from src/*.lua modules. Do not edit directly — edit src/ instead.
+    To regenerate: python build.py merge
+
+    Usage:
+        lua balatro_sim.lua              — runs self-tests + random agent
+        local Sim = dofile("balatro_sim.lua")  — use as library
+
+    API:
+        Sim.Env.reset(seed) → obs, info
+        Sim.Env.step(state, action_type, action_value) → obs, reward, done, info
+        Sim.Obs.encode(state) → flat float array (129 floats)
+        Sim.Env.action_spec → { types, obs_dim }
+]]
+
+"""
+
+    merged = header + "\n".join(chunks) + "\n"
     with open(MONOLITH, "w") as f:
         f.write(merged)
 
-    print(f"Merged {len(files)} files → {MONOLITH.name} ({len(merged.split(chr(10)))} lines)")
+    print(f"Merged {len(chunks)} files → {MONOLITH.name} ({total_lines} lines)")
+
+
+def check():
+    """Verify all src files exist."""
+    print("Checking src/ modules...\n")
+    all_ok = True
+    for name in MODULES:
+        fpath = SRC / name
+        if fpath.exists():
+            with open(fpath) as fh:
+                n = sum(1 for _ in fh)
+            print(f"  [OK]   {name:30s} ({n} lines)")
+        else:
+            print(f"  [MISS] {name}")
+            all_ok = False
+    print()
+    if all_ok:
+        print(f"All {len(MODULES)} modules present.")
+    else:
+        print("Some modules missing!")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "merge"
-    {"split": split, "merge": merge}.get(cmd, lambda: print(f"Unknown: {cmd}"))()
+    {"merge": merge, "check": check}.get(cmd, lambda: print(f"Unknown: {cmd} (use: merge, check)"))()

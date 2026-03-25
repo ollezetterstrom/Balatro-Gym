@@ -23,15 +23,21 @@ import numpy as np
 def check_prerequisites():
     """Verify Lua validation passes before training."""
     import subprocess
+    import shutil
+
+    lua_cmd = shutil.which("lua") or shutil.which("lua5.4") or shutil.which("luajit")
+    if not lua_cmd:
+        print("WARNING: lua not found in PATH. Skipping validation.")
+        return
+
     result = subprocess.run(
-        ["lua", "validate.lua"],
+        [lua_cmd, "validate.lua"],
         capture_output=True, text=True, cwd=os.path.dirname(__file__) or "."
     )
     if result.returncode != 0:
         print("VALIDATION FAILED. Fix scoring before training.")
         print(result.stdout)
         sys.exit(1)
-    # Count passed
     passed = result.stdout.count("[OK]")
     print(f"Validation: {passed}/49 passed. Engine is correct.\n")
 
@@ -65,6 +71,7 @@ def train(steps=100000, seed=42, log_dir="logs/"):
     elapsed = time.time() - t0
 
     # Save model
+    os.makedirs(log_dir, exist_ok=True)
     model_path = os.path.join(log_dir, "balatro_ppo")
     model.save(model_path)
     print(f"\nTraining complete in {elapsed:.1f}s")

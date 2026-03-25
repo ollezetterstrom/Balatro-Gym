@@ -1,14 +1,11 @@
 -- src/08_state.lua — Game state, draw, discard, joker ops
--- Auto-split. Edit freely.
-
---  SECTION 7 — GAME STATE
--- ============================================================================
 
 Sim.State = {}
-D = { hands=4, discards=4, hand_size=8, joker_slots=5, cons_slots=2, start_money=4 }
+Sim.DEFAULTS = { hands=4, discards=4, hand_size=8, joker_slots=5, cons_slots=2, start_money=4 }
 
 function Sim.State.new(opts)
     opts = opts or {}
+    local d = Sim.DEFAULTS
     local deck = opts.deck or Sim.Card.new_deck()
     local rng = opts.rng or Sim.RNG.new(opts.seed or "BALATRO")
     if not opts.deck then Sim.RNG.shuffle(rng, deck) end
@@ -17,13 +14,13 @@ function Sim.State.new(opts)
     local htc = {}
     for i = 1, 12 do htc[i] = 0 end
     return {
-        deck=deck, hand={}, discard={}, hand_limit=opts.hand_size or D.hand_size,
-        jokers=opts.jokers or {}, joker_slots=D.joker_slots,
-        consumables=opts.consumables or {}, consumable_slots=D.cons_slots,
+        deck=deck, hand={}, discard={}, hand_limit=opts.hand_size or d.hand_size,
+        jokers=opts.jokers or {}, joker_slots=d.joker_slots,
+        consumables=opts.consumables or {}, consumable_slots=d.cons_slots,
         phase=opts.phase or Sim.ENUMS.PHASE.BLIND_SELECT,
-        dollars=opts.dollars or D.start_money,
+        dollars=opts.dollars or d.start_money,
         ante=opts.ante or 1, round=0,
-        hands_left=D.hands, discards_left=D.discards, hands_played=0,
+        hands_left=d.hands, discards_left=d.discards, hands_played=0,
         blind_type="none", blind_chips=300, blind_beaten=false,
         selection={}, hand_levels=hl, hand_type_counts=htc,
         chips=0, total_chips=0,
@@ -31,6 +28,7 @@ function Sim.State.new(opts)
         pack_cards=nil, last_consumable=nil,
         rng=rng, _joker_n=0, _cons_n=0,
         ride_the_bus=0, cards_drawn=0,
+        round_dollars=0,
     }
 end
 
@@ -70,8 +68,6 @@ function Sim.State.add_joker(state, joker_def)
     if #state.jokers >= state.joker_slots then return false end
     state._joker_n = state._joker_n + 1
     state.jokers[#state.jokers+1] = {
-
-
         id = joker_def.id, edition = 0, eternal = false,
         uid = state._joker_n,
     }
@@ -87,7 +83,3 @@ function Sim.State.remove_joker(state, uid)
     end
     return false
 end
-
--- ============================================================================
-
-

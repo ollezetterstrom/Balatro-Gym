@@ -1,17 +1,14 @@
 -- src/11_observation.lua — Observation encoder
--- Auto-split. Edit freely.
-
---  SECTION 10 — OBSERVATION ENCODING
--- ============================================================================
 
 Sim.Obs = {}
-Sim.Obs.DIM = 129  -- 48(hand) + 15(jokers) + 30(global) + 4(cons) + 1(pack_flag) + 30(pack) + 1(shop_misc)
+Sim.Obs.DIM = 129
 
 function Sim.Obs.encode(state)
     local o = {}
     local n = 0
+    local defs = Sim.DEFAULTS
 
-    -- 8 hand card slots × 6 floats = 48
+    -- 8 hand card slots × 6 features = 48
     for i = 1, 8 do
         local c = state.hand[i]
         if c then
@@ -20,45 +17,46 @@ function Sim.Obs.encode(state)
             o[n+3] = c.enhancement / 8
             o[n+4] = c.edition / 4
             o[n+5] = c.seal / 4
-            o[n+6] = 1  -- has card
+            o[n+6] = 1
         else
             for j = 1, 6 do o[n+j] = 0 end
         end
         n = n + 6
     end
 
-    -- 5 joker slots × 3 floats = 15
+    -- 5 joker slots × 3 features = 15
     local jcount = #Sim._JOKER_BY_ID
     for i = 1, 5 do
         local jk = state.jokers[i]
         if jk then
             o[n+1] = jk.id / math.max(jcount, 1)
             o[n+2] = jk.edition / 4
-            o[n+3] = 1  -- has joker
+            o[n+3] = 1
         else
             for j = 1, 3 do o[n+j] = 0 end
         end
         n = n + 3
     end
 
-    -- Global features = 30 floats
+    -- 8 global features
     o[n+1] = math.min(state.chips / math.max(state.blind_chips, 1), 1.0)
     o[n+2] = math.min(state.dollars / 25.0, 1.0)
-    o[n+3] = state.hands_left / D.hands
-    o[n+4] = state.discards_left / D.discards
+    o[n+3] = state.hands_left / defs.hands
+    o[n+4] = state.discards_left / defs.discards
     o[n+5] = state.ante / 8.0
     o[n+6] = math.min(state.round / 24.0, 1.0)
     o[n+7] = state.blind_beaten and 1.0 or 0.0
     o[n+8] = math.min(state.deck_count / 52.0, 1.0)
     n = n + 8
 
-    -- 12 hand levels (log-scaled)
+    -- 12 hand levels (log-scaled, capped to [0, 1])
     for i = 1, 12 do
-        o[n+1] = math.log((state.hand_levels[i] or 1) + 1) * 1.4426950408889634 / 5.0
+        local v = math.log((state.hand_levels[i] or 1) + 1) * 0.2885390081777927
+        o[n+1] = math.min(v, 1.0)
         n = n + 1
     end
 
-    -- Phase one-hot (3 floats)
+    -- Phase one-hot (SELECTING_HAND, SHOP, PACK_OPEN)
     local p = state.phase
     o[n+1] = (p == 1) and 1.0 or 0.0
     o[n+2] = (p == 2) and 1.0 or 0.0
@@ -69,13 +67,13 @@ function Sim.Obs.encode(state)
     o[n+1] = #state.selection / 8.0
     n = n + 1
 
-    -- Consumable slots × 3 floats = 6
+    -- 2 consumable slots × 2 features = 4
     local ccount = #Sim._CONS_BY_ID
     for i = 1, 2 do
         local cs = state.consumables[i]
         if cs then
             o[n+1] = cs.id / math.max(ccount, 1)
-            o[n+2] = 1  -- has consumable
+            o[n+2] = 1
         else
             o[n+1] = 0; o[n+2] = 0
         end
@@ -86,13 +84,11 @@ function Sim.Obs.encode(state)
     o[n+1] = state.pack_cards and 1.0 or 0.0
     n = n + 1
 
-    -- 5 pack card slots × 6 floats = 30
+    -- 5 pack card slots × 6 features = 30
     for i = 1, 5 do
         local pc = state.pack_cards and state.pack_cards[i] or nil
         if pc then
-            -- pack_cards stores card IDs (joker IDs or card data)
             if type(pc) == "table" and pc.rank then
-                -- Playing card
                 o[n+1] = pc.rank / 14
                 o[n+2] = pc.suit / 4
                 o[n+3] = pc.enhancement / 8
@@ -100,7 +96,6 @@ function Sim.Obs.encode(state)
                 o[n+5] = pc.seal / 4
                 o[n+6] = 1
             elseif type(pc) == "number" then
-                -- Joker ID
                 o[n+1] = pc / math.max(jcount, 1)
                 o[n+2] = 0; o[n+3] = 0; o[n+4] = 0; o[n+5] = 0
                 o[n+6] = 1
@@ -113,15 +108,13 @@ function Sim.Obs.encode(state)
         n = n + 6
     end
 
-    -- Shop items present (joker1, joker2, booster, consumable) = 4
+    -- Shop items present (joker1, joker2, booster, consumable)
     if state.shop then
         o[n+1] = state.shop.jokers[1] and 1.0 or 0.0
         o[n+2] = state.shop.jokers[2] and 1.0 or 0.0
         o[n+3] = state.shop.booster and 1.0 or 0.0
         o[n+4] = state.shop.consumable and 1.0 or 0.0
     else
-
-
         o[n+1] = 0; o[n+2] = 0; o[n+3] = 0; o[n+4] = 0
     end
     n = n + 4
@@ -134,16 +127,9 @@ function Sim.Obs.encode(state)
     o[n+1] = #state.consumables / 2.0
     n = n + 1
 
-    -- Round dollars earned so far (normalized)
-    o[n+1] = math.min((state.round_dollars or 0) / 25.0, 1.0)
-    n = n + 1
-
     -- Spare to fill to 129
-    while n < 129 do n = n + 1; o[n] = 0 end
+    o[n+1] = 0
+    n = n + 1
 
     return o
 end
-
--- ============================================================================
-
-

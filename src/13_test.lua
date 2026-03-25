@@ -1,10 +1,6 @@
--- src/13_test.lua — Self-tests, random agent, return Sim
--- Auto-split. Edit freely.
+-- src/13_test.lua — Self-tests, random agent
 
---  SECTION 12 — SELF-TEST & RANDOM AGENT
--- ============================================================================
-
-if _SIM_RUN_TESTS or not pcall(debug.getlocal, 4, 1) then
+if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
     local E = Sim.ENUMS
     local C = Sim.Card.new
     local passed, total = 0, 0
@@ -16,22 +12,24 @@ if _SIM_RUN_TESTS or not pcall(debug.getlocal, 4, 1) then
 
     print("=== BALATRO SIM v2 — Self-Test ===\n")
 
+    local J = Sim.JOKER_DEFS
+
     -- Test: Pair + Joker
-    local s = Sim.State.new({ seed="T1", jokers={{id=1,edition=0,eternal=false,uid=1}} })
+    local s = Sim.State.new({ seed="T1", jokers={{id=J["j_joker"].id,edition=0,eternal=false,uid=1}} })
     s.hand = { C(14,1), C(14,2), C(3,3), C(7,4), C(10,1), C(5,2), C(9,3), C(12,4) }
     local t,c,m,ht = Sim.Engine.calculate(s, {s.hand[1], s.hand[2]})
     test("Pair + Joker = 192", t == 192 and ht == 11)
 
     -- Test: Two Pair + Duo
-    s = Sim.State.new({ seed="T2", jokers={{id=6,edition=0,eternal=false,uid=1}} })
+    s = Sim.State.new({ seed="T2", jokers={{id=J["j_the_duo"].id,edition=0,eternal=false,uid=1}} })
     s.hand = { C(5,1), C(5,2), C(9,3), C(9,4), C(12,1), C(2,2), C(6,3), C(11,4) }
     t,c,m,ht = Sim.Engine.calculate(s, {s.hand[1],s.hand[2],s.hand[3],s.hand[4]})
     test("Two Pair + Duo = 192", t == 192 and ht == 10)
 
     -- Test: Blueprint copies Joker
     s = Sim.State.new({ seed="T3", jokers={
-        {id=8,edition=0,eternal=false,uid=1},  -- Blueprint
-        {id=1,edition=0,eternal=false,uid=2},  -- Joker
+        {id=J["j_blueprint"].id,edition=0,eternal=false,uid=1},
+        {id=J["j_joker"].id,edition=0,eternal=false,uid=2},
     }})
     s.hand = { C(7,1), C(7,2), C(2,3), C(4,4), C(11,1), C(8,2), C(13,3), C(6,4) }
     t,c,m,ht = Sim.Engine.calculate(s, {s.hand[1], s.hand[2]})
@@ -52,11 +50,11 @@ if _SIM_RUN_TESTS or not pcall(debug.getlocal, 4, 1) then
     test("Env.reset returns obs", #obs == 129 and info.ante == 1)
 
     -- Test: Burnt Joker
-    local bs = Sim.State.new({ seed="BJ", jokers={{id=9,edition=0,eternal=false,uid=1}} })
+    local burnt_id = J["j_burnt_joker"].id
+    local bs = Sim.State.new({ seed="BJ", jokers={{id=burnt_id,edition=0,eternal=false,uid=1}} })
     bs.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     bs.discards_left = 4  -- first discard of round
-    -- Simulate discard via engine context
-    local def = Sim._JOKER_BY_ID[9]  -- Burnt Joker
+    local def = Sim._JOKER_BY_ID[burnt_id]
     local disc_ht = Sim.Eval.get_hand({bs.hand[3], bs.hand[4]})
     local ctx = { on_discard = true, is_first_discard = true, discarded_hand_type = disc_ht }
     local fx = def.apply(ctx, bs, bs.jokers[1])
@@ -72,20 +70,21 @@ if _SIM_RUN_TESTS or not pcall(debug.getlocal, 4, 1) then
 
     -- Test: REORDER swaps jokers
     local rs = Sim.State.new({ seed="REO", jokers={
-        {id=1, edition=0, eternal=false, uid=1},
-        {id=6, edition=0, eternal=false, uid=2},
+        {id=J["j_joker"].id, edition=0, eternal=false, uid=1},
+        {id=J["j_the_duo"].id, edition=0, eternal=false, uid=2},
     }})
     local id_before_1, id_before_2 = rs.jokers[1].id, rs.jokers[2].id
     local rv = (1 << 4) | 0 | (1 << 9)  -- src=0, tgt=1, mode=swap, area=joker
-    _do_reorder(rs, rv)
+    Sim._do_reorder(rs, rv)
     test("REORDER swaps jokers", rs.jokers[1].id == id_before_2 and rs.jokers[2].id == id_before_1)
 
     -- Test: Hiker gives permanent chips
-    local hs = Sim.State.new({ seed="HIK", jokers={{id=28, edition=0, eternal=false, uid=1}} })
+    local hiker_id = Sim.JOKER_DEFS["j_hiker"].id
+    local hs = Sim.State.new({ seed="HIK", jokers={{id=hiker_id, edition=0, eternal=false, uid=1}} })
     hs.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     local pb_before = hs.hand[1].perma_bonus
     Sim.Engine.calculate(hs, {hs.hand[1], hs.hand[2]})
-    test("Hiker +4 perma_bonus", hs.hand[1].perma_bonus == pb_before + 4)
+    test("Hiker +5 perma_bonus", hs.hand[1].perma_bonus == pb_before + 5)
 
     -- Test: Shop has consumable slot
     local ss = Sim.State.new({ seed="SHOP" })
@@ -102,56 +101,56 @@ if _SIM_RUN_TESTS or not pcall(debug.getlocal, 4, 1) then
     local es = Sim.State.new({ seed="EMP", consumables={{id=3, uid=1}} })
     es.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     es.selection = {1, 2}
-    _use_consumable(es, 1)
+    Sim._use_consumable(es, 1)
     test("Empress enhances to Mult", es.hand[1].enhancement == 2 and es.hand[2].enhancement == 2)
 
     -- Test: Venus levels Three of a Kind
     local vs = Sim.State.new({ seed="VEN", consumables={{id=5, uid=1}} })
     vs.hand = { C(2,1), C(5,2), C(9,3), C(11,4), C(14,1), C(3,2), C(7,3), C(13,4) }
     local vhl = vs.hand_levels[9]
-    _use_consumable(vs, 1)
+    Sim._use_consumable(vs, 1)
     test("Venus levels Three of a Kind", vs.hand_levels[9] == vhl + 1)
 
     -- Test: Jupiter levels Flush
     local js = Sim.State.new({ seed="JUP", consumables={{id=8, uid=1}} })
     js.hand = { C(2,1), C(5,2), C(9,3), C(11,4), C(14,1), C(3,2), C(7,3), C(13,4) }
     local jhl = js.hand_levels[7]
-    _use_consumable(js, 1)
+    Sim._use_consumable(js, 1)
     test("Jupiter levels Flush", js.hand_levels[7] == jhl + 1)
 
     -- Test: The Magician enhances to Lucky
     local ms = Sim.State.new({ seed="MAG", consumables={{id=15, uid=1}} })
     ms.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     ms.selection = {1, 2}
-    _use_consumable(ms, 1)
+    Sim._use_consumable(ms, 1)
     test("Magician enhances to Lucky", ms.hand[1].enhancement == 8 and ms.hand[2].enhancement == 8)
 
     -- Test: The Hermit doubles money
     local hermit_s = Sim.State.new({ seed="HER", consumables={{id=22, uid=1}} })
     hermit_s.dollars = 15
     hermit_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
-    _use_consumable(hermit_s, 1)
+    Sim._use_consumable(hermit_s, 1)
     test("Hermit doubles money", hermit_s.dollars == 30)
 
     -- Test: The Hermit caps at +$20
     local hermit2_s = Sim.State.new({ seed="HER2", consumables={{id=22, uid=1}} })
     hermit2_s.dollars = 30
     hermit2_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
-    _use_consumable(hermit2_s, 1)
+    Sim._use_consumable(hermit2_s, 1)
     test("Hermit caps at +$20", hermit2_s.dollars == 50)
 
     -- Test: Strength increases rank
     local str_s = Sim.State.new({ seed="STR", consumables={{id=21, uid=1}} })
     str_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     str_s.selection = {1, 2}
-    _use_consumable(str_s, 1)
+    Sim._use_consumable(str_s, 1)
     test("Strength +1 rank", str_s.hand[1].rank == 6 and str_s.hand[2].rank == 6)
 
     -- Test: The Star changes suit to Diamonds
     local star_s = Sim.State.new({ seed="STAR", consumables={{id=30, uid=1}} })
     star_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     star_s.selection = {1}
-    _use_consumable(star_s, 1)
+    Sim._use_consumable(star_s, 1)
     test("Star changes to Diamonds", star_s.hand[1].suit == 4)
 
     -- Test: Temperance gives money for jokers
@@ -159,7 +158,7 @@ if _SIM_RUN_TESTS or not pcall(debug.getlocal, 4, 1) then
         jokers={{id=1,edition=0,eternal=false,uid=1}} })
     temp_s.dollars = 4
     temp_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
-    _use_consumable(temp_s, 1)
+    Sim._use_consumable(temp_s, 1)
     test("Temperance gives joker value", temp_s.dollars > 4)
 
     -- Test: Steel card held in hand = ×1.5 mult
@@ -306,28 +305,28 @@ if _SIM_RUN_TESTS or not pcall(debug.getlocal, 4, 1) then
     local tal_s = Sim.State.new({ seed="TAL", consumables={{id=37, uid=1}} })
     tal_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     tal_s.selection = {1}
-    _use_consumable(tal_s, 1)
+    Sim._use_consumable(tal_s, 1)
     test("Talisman adds Gold seal", tal_s.hand[1].seal == 1)
 
     -- Test: Deja Vu adds Red seal
     local dv_s = Sim.State.new({ seed="DV", consumables={{id=45, uid=1}} })
     dv_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     dv_s.selection = {1}
-    _use_consumable(dv_s, 1)
+    Sim._use_consumable(dv_s, 1)
     test("Deja Vu adds Red seal", dv_s.hand[1].seal == 2)
 
     -- Test: Trance adds Blue seal
     local tr_s = Sim.State.new({ seed="TR", consumables={{id=47, uid=1}} })
     tr_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     tr_s.selection = {1}
-    _use_consumable(tr_s, 1)
+    Sim._use_consumable(tr_s, 1)
     test("Trance adds Blue seal", tr_s.hand[1].seal == 3)
 
     -- Test: Immolate destroys cards and gives $20
     local imm_s = Sim.State.new({ seed="IMM", consumables={{id=43, uid=1}} })
     imm_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     imm_s.dollars = 0
-    _use_consumable(imm_s, 1)
+    Sim._use_consumable(imm_s, 1)
     test("Immolate gives $20", imm_s.dollars == 20)
     test("Immolate destroys cards", #imm_s.hand == 3)  -- 8 - 5 = 3
 
@@ -336,14 +335,14 @@ if _SIM_RUN_TESTS or not pcall(debug.getlocal, 4, 1) then
     cry_s.hand = { C(14,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2) }
     cry_s.selection = {1}
     local hand_before = #cry_s.hand
-    _use_consumable(cry_s, 1)
+    Sim._use_consumable(cry_s, 1)
     test("Cryptid creates 2 copies", #cry_s.hand == hand_before + 2)
     test("Cryptid copies are Aces", cry_s.hand[#cry_s.hand].rank == 14)
 
     -- Test: Sigil changes all suits
     local sig_s = Sim.State.new({ seed="SIG", consumables={{id=40, uid=1}} })
     sig_s.hand = { C(2,1), C(5,2), C(9,3), C(11,4), C(14,1), C(3,2), C(7,3), C(13,4) }
-    _use_consumable(sig_s, 1)
+    Sim._use_consumable(sig_s, 1)
     local all_same = true
     local s = sig_s.hand[1].suit
     for _, c in ipairs(sig_s.hand) do

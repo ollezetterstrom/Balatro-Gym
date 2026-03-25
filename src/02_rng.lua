@@ -1,8 +1,4 @@
 -- src/02_rng.lua — Deterministic LCG
--- Auto-split. Edit freely.
-
---  SECTION 2 — DETERMINISTIC RNG (LCG)
--- ============================================================================
 
 Sim.RNG = {}
 function Sim.RNG.hash(s)
@@ -20,18 +16,15 @@ function Sim.RNG.next(r)
     r.state = (r.state * 1664525 + 1013904223) % 4294967296
     return r.state / 4294967296
 end
-function Sim.RNG.int(r, lo, hi) return lo + math.floor(Sim.RNG.next(r) * (hi - lo + 1)) end
+function Sim.RNG.int(r, lo, hi)
+    local n = hi - lo + 1
+    return lo + math.floor(Sim.RNG.next(r) * n * (1 - 1e-9))
+end
 function Sim.RNG.shuffle(r, t)
     for i = #t, 2, -1 do
-        local j = 1 + math.floor(Sim.RNG.next(r) * i)
+        local j = 1 + math.floor(Sim.RNG.next(r) * i * (1 - 1e-9))
         t[i], t[j] = t[j], t[i]
     end
-
-
     return t
 end
 function Sim.RNG.pick(r, t) return t[Sim.RNG.int(r, 1, #t)] end
-
--- ============================================================================
-
-

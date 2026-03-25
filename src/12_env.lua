@@ -1,14 +1,12 @@
 -- src/12_env.lua — Gymnasium env (reset/step/handlers)
--- Auto-split. Edit freely.
-
---  SECTION 11 — ENVIRONMENT (Gym-style Interface)
--- ============================================================================
 
 Sim.Env = {}
 Sim.Env.action_spec = {
     types = { "SELECT_CARDS","PLAY_DISCARD","SHOP_ACTION","USE_CONSUMABLE","PHASE_ACTION" },
     obs_dim = 129,
 }
+
+local E = Sim.ENUMS
 
 function Sim.Env.reset(seed)
     local rng = Sim.RNG.new(seed)
@@ -17,17 +15,12 @@ function Sim.Env.reset(seed)
     local btype = Sim.Blind.next_type(state)
     if btype then
         Sim.Blind.setup(state, btype)
-        state.phase = Sim.ENUMS.PHASE.SELECTING_HAND
+        state.phase = E.PHASE.SELECTING_HAND
     end
     return Sim.Obs.encode(state), { seed = seed, ante = state.ante }
 end
 
--- ============================================================
--- Shared helper functions
--- ============================================================
-
-function _do_reorder(state, value)
-    local E = Sim.ENUMS
+function Sim._do_reorder(state, value)
     local R = E.REWARD
     local src  = (value & 0xF) + 1         -- bits 0-3: source (0-indexed → 1-indexed)
     local tgt  = ((value >> 4) & 0xF) + 1  -- bits 4-7: target
@@ -50,8 +43,7 @@ function _do_reorder(state, value)
     return Sim.Obs.encode(state), 0, false
 end
 
-function _use_consumable(state, cons_index)
-    local E = Sim.ENUMS
+function Sim._use_consumable(state, cons_index)
     local R = E.REWARD
     local cs = state.consumables[cons_index]
     if not cs then
@@ -77,13 +69,8 @@ function _use_consumable(state, cons_index)
     return Sim.Obs.encode(state), 0, false
 end
 
--- ============================================================
--- Phase handlers (internal, called by step)
--- ============================================================
-
 local function _step_selecting(state, atype, value)
-    local E = Sim.ENUMS
-    local R = Sim.ENUMS.REWARD
+    local R = E.REWARD
 
     if atype == E.ACTION.SELECT_CARDS then
         -- value = 8-bit bitmask
@@ -132,7 +119,7 @@ local function _step_selecting(state, atype, value)
             -- Ride the Bus: reset on face cards, increment otherwise
             local has_face = false
             for _, c in ipairs(played) do
-                if c.rank >= 11 and c.rank <= 13 then has_face = true; break end
+                if c.rank >= E.RANK.JACK and c.rank <= E.RANK.KING then has_face = true; break end
             end
             if has_face then
                 state.ride_the_bus = 0
@@ -143,7 +130,7 @@ local function _step_selecting(state, atype, value)
             -- Glass card destruction (1/4 chance per Glass card)
             local destroyed = {}
             for _, c in ipairs(played) do
-                if c.enhancement == 4 and not c.debuffed then
+                if c.enhancement == E.ENHANCEMENT.GLASS and not Sim.Blind.is_card_debuffed(state, c) then
                     if state.rng and Sim.RNG.next(state.rng) < 0.25 then
                         destroyed[c] = true
                     end
@@ -232,7 +219,7 @@ local function _step_selecting(state, atype, value)
                     if def and def.apply then
                         local ctx = {
                             on_discard = true,
-                            is_first_discard = (state.discards_left == D.discards),
+                            is_first_discard = (state.discards_left == Sim.DEFAULTS.discards),
                             discarded_hand_type = disc_ht,
                             cards_discarded = num_discarded,
                         }
@@ -269,21 +256,20 @@ local function _step_selecting(state, atype, value)
     elseif atype == E.ACTION.PHASE_ACTION then
         -- value 3 = next (after blind beaten)
         if value == 3 and state.blind_beaten then
-            return _advance_blind(state)
+            return Sim._advance_blind(state)
         end
 
     elseif atype == E.ACTION.USE_CONSUMABLE then
-        return _use_consumable(state, value)
+        return Sim._use_consumable(state, value)
 
     elseif atype == E.ACTION.REORDER then
-        return _do_reorder(state, value)
+        return Sim._do_reorder(state, value)
     end
 
     return Sim.Obs.encode(state), R.INVALID, false
 end
 
-function _advance_blind(state)
-    local E = Sim.ENUMS
+function Sim._advance_blind(state)
     local R = E.REWARD
     local names = {"Small","Big","Boss"}
     local bname = state.blind_type
@@ -338,7 +324,6 @@ function _advance_blind(state)
 end
 
 local function _step_shop(state, atype, value)
-    local E = Sim.ENUMS
     local R = E.REWARD
 
     if atype == E.ACTION.SHOP_ACTION then
@@ -370,10 +355,10 @@ local function _step_shop(state, atype, value)
 
     elseif atype == E.ACTION.USE_CONSUMABLE then
         -- Use consumable from area (not from shop)
-        return _use_consumable(state, value)
+        return Sim._use_consumable(state, value)
 
     elseif atype == E.ACTION.REORDER then
-        return _do_reorder(state, value)
+        return Sim._do_reorder(state, value)
 
     elseif atype == E.ACTION.PHASE_ACTION and value == 0 then
         -- End shop
@@ -390,7 +375,6 @@ local function _step_shop(state, atype, value)
 end
 
 local function _step_pack(state, atype, value)
-    local E = Sim.ENUMS
     local R = E.REWARD
 
     if atype == E.ACTION.SELECT_CARDS then
@@ -412,15 +396,7 @@ local function _step_pack(state, atype, value)
     return Sim.Obs.encode(state), R.INVALID, false
 end
 
--- ============================================================
--- Main step function
--- ============================================================
-
-
-
 function Sim.Env.step(state, atype, value)
-    local E = Sim.ENUMS
-
     if state.phase == E.PHASE.SELECTING_HAND then
         return _step_selecting(state, atype, value)
     elseif state.phase == E.PHASE.SHOP then
@@ -440,7 +416,3 @@ function Sim.Env.step(state, atype, value)
     -- GAME_OVER or WIN
     return Sim.Obs.encode(state), 0, true
 end
-
--- ============================================================================
-
-

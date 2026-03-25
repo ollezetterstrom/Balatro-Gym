@@ -1,45 +1,35 @@
 -- src/07_engine.lua — Scoring engine
--- Auto-split. Edit freely.
-
---  SECTION 6 — SCORING ENGINE
--- ============================================================================
 
 Sim.Engine = {}
+
+local E = Sim.ENUMS
 
 local function _score_card_effects(state, c, insc, debuffed, chips, mult)
     if not insc or debuffed then return chips, mult end
 
-    -- Base card chips (not for Stone)
-    if c.enhancement ~= 6 then chips = chips + Sim.Card.chips(c) end
+    if c.enhancement ~= E.ENHANCEMENT.STONE then chips = chips + Sim.Card.chips(c) end
 
-    -- Enhancement effects (scoring)
-    if c.enhancement == 1 then       -- Bonus: +30 chips
+    if c.enhancement == E.ENHANCEMENT.BONUS then
         chips = chips + 30
-    elseif c.enhancement == 2 then   -- Mult: +4 mult
+    elseif c.enhancement == E.ENHANCEMENT.MULT then
         mult = mult + 4
-    elseif c.enhancement == 4 then   -- Glass: ×2 mult
+    elseif c.enhancement == E.ENHANCEMENT.GLASS then
         mult = mult * 2
-    elseif c.enhancement == 6 then   -- Stone: +50 chips
+    elseif c.enhancement == E.ENHANCEMENT.STONE then
         chips = chips + 50
-    elseif c.enhancement == 8 then   -- Lucky: 1/5 +20 mult, 1/15 +$20
-        if state.rng and Sim.RNG.next(state.rng) < 0.2 then
-            mult = mult + 20
-        end
-        if state.rng and Sim.RNG.next(state.rng) < (1/15) then
-            state.dollars = state.dollars + 20
-        end
+    elseif c.enhancement == E.ENHANCEMENT.LUCKY then
+        if state.rng and Sim.RNG.next(state.rng) < 0.2 then mult = mult + 20 end
+        if state.rng and Sim.RNG.next(state.rng) < (1/15) then state.dollars = state.dollars + 20 end
     end
 
-    -- Edition effects
-    if c.edition == 1 then chips = chips + 50        -- Foil
-    elseif c.edition == 2 then mult = mult + 10      -- Holo
-    elseif c.edition == 3 then mult = mult * 1.5 end -- Poly
+    if c.edition == E.EDITION.FOIL then chips = chips + 50
+    elseif c.edition == E.EDITION.HOLO then mult = mult + 10
+    elseif c.edition == E.EDITION.POLYCHROME then mult = mult * 1.5 end
 
     return chips, mult
 end
 
 function Sim.Engine.calculate(state, played)
-    local E = Sim.ENUMS
     local hand_type, scoring, all_hands = Sim.Eval.get_hand(played)
 
     local base = Sim.HAND_BASE[hand_type]
@@ -57,13 +47,11 @@ function Sim.Engine.calculate(state, played)
 
         chips, mult = _score_card_effects(state, c, insc, debuffed, chips, mult)
 
-        -- Red seal: re-trigger scoring effects
-        if insc and not debuffed and c.seal == 2 then
+        if insc and not debuffed and c.seal == E.SEAL.RED then
             chips, mult = _score_card_effects(state, c, insc, debuffed, chips, mult)
         end
 
-        -- Gold seal: +3 money when scored
-        if insc and not debuffed and c.seal == 1 then
+        if insc and not debuffed and c.seal == E.SEAL.GOLD then
             state.dollars = state.dollars + 3
         end
 
@@ -107,9 +95,9 @@ function Sim.Engine.calculate(state, played)
                     if fx.Xmult_mod then mult = mult * fx.Xmult_mod end
                 end
             end
-            if jk.edition == 1 then chips = chips + 50
-            elseif jk.edition == 2 then mult = mult + 10
-            elseif jk.edition == 3 then mult = mult * 1.5 end
+            if jk.edition == E.EDITION.FOIL then chips = chips + 50
+            elseif jk.edition == E.EDITION.HOLO then mult = mult + 10
+            elseif jk.edition == E.EDITION.POLYCHROME then mult = mult * 1.5 end
         end
     end
 
@@ -119,12 +107,11 @@ function Sim.Engine.calculate(state, played)
         local debuffed = Sim.Blind.is_card_debuffed(state, c)
         if not debuffed then
             local reps = 1
-            -- Red seal on held card: re-trigger held-in-hand effects
-            if c.seal == 2 then reps = 2 end
+            if c.seal == E.SEAL.RED then reps = 2 end
             for r = 1, reps do
-                if c.enhancement == 5 then   -- Steel: ×1.5 mult
+                if c.enhancement == E.ENHANCEMENT.STEEL then
                     mult = mult * 1.5
-                elseif c.enhancement == 7 then -- Gold: +3 money
+                elseif c.enhancement == E.ENHANCEMENT.GOLD then
                     state.dollars = state.dollars + 3
                 end
                 -- Joker effects on held cards
@@ -163,7 +150,7 @@ function Sim.Engine.calculate(state, played)
             local c = played[i]
             local insc = is_sc[c]
             local debuffed = Sim.Blind.is_card_debuffed(state, c)
-            if insc and not debuffed and c.rank >= 11 and c.rank <= 13 then
+            if insc and not debuffed and c.rank >= E.RANK.JACK and c.rank <= E.RANK.KING then
                 -- Re-trigger individual card joker effects for face cards
                 if state.jokers then
                     for ji = 1, #state.jokers do
@@ -190,7 +177,3 @@ function Sim.Engine.calculate(state, played)
 
     return math.floor(chips * mult), chips, mult, hand_type, scoring, all_hands
 end
-
--- ============================================================================
-
-

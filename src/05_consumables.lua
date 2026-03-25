@@ -1,13 +1,9 @@
 -- src/05_consumables.lua — Consumables, pool, advanced jokers
--- Auto-split. Edit freely.
-
---  SECTION 5 — CONSUMABLE DEFINITIONS
--- ============================================================================
 
 Sim.CONSUMABLE_DEFS = {}
 Sim._CONS_BY_ID = {}
 
-function _reg_cons(key, name, set, effect_fn)
+function Sim._reg_cons(key, name, set, effect_fn)
     local def = { id = #Sim._CONS_BY_ID + 1, key = key, name = name,
                   set = set, effect = effect_fn }
     Sim.CONSUMABLE_DEFS[key] = def
@@ -15,19 +11,19 @@ function _reg_cons(key, name, set, effect_fn)
     return def
 end
 
-_reg_cons("c_pluto", "Pluto", "Planet", function(ctx, state)
+Sim._reg_cons("c_pluto", "Pluto", "Planet", function(ctx, state)
     -- Level up High Card
     Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.HIGH_CARD, 1)
     return { level_up = Sim.ENUMS.HAND_TYPE.HIGH_CARD }
 end)
 
-_reg_cons("c_mercury", "Mercury", "Planet", function(ctx, state)
+Sim._reg_cons("c_mercury", "Mercury", "Planet", function(ctx, state)
     -- Level up Pair
     Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.PAIR, 1)
     return { level_up = Sim.ENUMS.HAND_TYPE.PAIR }
 end)
 
-_reg_cons("c_empress", "The Empress", "Tarot", function(ctx, state)
+Sim._reg_cons("c_empress", "The Empress", "Tarot", function(ctx, state)
     -- Enhance up to 2 selected cards to Mult (+4 Mult)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local count = 0
@@ -41,7 +37,7 @@ _reg_cons("c_empress", "The Empress", "Tarot", function(ctx, state)
     return { enhanced = count }
 end)
 
-_reg_cons("c_fool", "The Fool", "Tarot", function(ctx, state)
+Sim._reg_cons("c_fool", "The Fool", "Tarot", function(ctx, state)
     -- Spawn the last used consumable (other than The Fool)
     if not state.last_consumable then return nil end
     if #state.consumables >= state.consumable_slots then return nil end
@@ -55,59 +51,59 @@ end)
 
 -- === Planet cards (10 remaining) ===
 
-_reg_cons("c_venus", "Venus", "Planet", function(ctx, state)
+Sim._reg_cons("c_venus", "Venus", "Planet", function(ctx, state)
     Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.THREE_OF_A_KIND, 1)
     return { level_up = Sim.ENUMS.HAND_TYPE.THREE_OF_A_KIND }
 end)
 
-_reg_cons("c_earth", "Earth", "Planet", function(ctx, state)
+Sim._reg_cons("c_earth", "Earth", "Planet", function(ctx, state)
     Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.FULL_HOUSE, 1)
     return { level_up = Sim.ENUMS.HAND_TYPE.FULL_HOUSE }
 end)
 
-_reg_cons("c_mars", "Mars", "Planet", function(ctx, state)
+Sim._reg_cons("c_mars", "Mars", "Planet", function(ctx, state)
     Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.FOUR_OF_A_KIND, 1)
     return { level_up = Sim.ENUMS.HAND_TYPE.FOUR_OF_A_KIND }
 end)
 
-_reg_cons("c_jupiter", "Jupiter", "Planet", function(ctx, state)
+Sim._reg_cons("c_jupiter", "Jupiter", "Planet", function(ctx, state)
     Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.FLUSH, 1)
     return { level_up = Sim.ENUMS.HAND_TYPE.FLUSH }
 end)
 
-_reg_cons("c_saturn", "Saturn", "Planet", function(ctx, state)
+Sim._reg_cons("c_saturn", "Saturn", "Planet", function(ctx, state)
     Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.STRAIGHT, 1)
     return { level_up = Sim.ENUMS.HAND_TYPE.STRAIGHT }
 end)
 
-_reg_cons("c_neptune", "Neptune", "Planet", function(ctx, state)
+Sim._reg_cons("c_neptune", "Neptune", "Planet", function(ctx, state)
     Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.STRAIGHT_FLUSH, 1)
     return { level_up = Sim.ENUMS.HAND_TYPE.STRAIGHT_FLUSH }
 end)
 
-_reg_cons("c_uranus", "Uranus", "Planet", function(ctx, state)
+Sim._reg_cons("c_uranus", "Uranus", "Planet", function(ctx, state)
     Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.TWO_PAIR, 1)
     return { level_up = Sim.ENUMS.HAND_TYPE.TWO_PAIR }
 end)
 
-_reg_cons("c_planet_x", "Planet X", "Planet", function(ctx, state)
+Sim._reg_cons("c_planet_x", "Planet X", "Planet", function(ctx, state)
     Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.FIVE_OF_A_KIND, 1)
     return { level_up = Sim.ENUMS.HAND_TYPE.FIVE_OF_A_KIND }
 end)
 
-_reg_cons("c_ceres", "Ceres", "Planet", function(ctx, state)
+Sim._reg_cons("c_ceres", "Ceres", "Planet", function(ctx, state)
     Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.FLUSH_HOUSE, 1)
     return { level_up = Sim.ENUMS.HAND_TYPE.FLUSH_HOUSE }
 end)
 
-_reg_cons("c_eris", "Eris", "Planet", function(ctx, state)
+Sim._reg_cons("c_eris", "Eris", "Planet", function(ctx, state)
     Sim.State.level_up(state, Sim.ENUMS.HAND_TYPE.FLUSH_FIVE, 1)
     return { level_up = Sim.ENUMS.HAND_TYPE.FLUSH_FIVE }
 end)
 
 -- === Tarot cards (16 remaining) ===
 
-_reg_cons("c_magician", "The Magician", "Tarot", function(ctx, state)
+Sim._reg_cons("c_magician", "The Magician", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local count = 0
     for _, idx in ipairs(ctx.selected) do
@@ -120,7 +116,7 @@ _reg_cons("c_magician", "The Magician", "Tarot", function(ctx, state)
     return { enhanced = count }
 end)
 
-_reg_cons("c_high_priestess", "The High Priestess", "Tarot", function(ctx, state)
+Sim._reg_cons("c_high_priestess", "The High Priestess", "Tarot", function(ctx, state)
     local created = 0
     for _ = 1, 2 do
         if #state.consumables < state.consumable_slots then
@@ -137,7 +133,7 @@ _reg_cons("c_high_priestess", "The High Priestess", "Tarot", function(ctx, state
     return { created = created }
 end)
 
-_reg_cons("c_emperor", "The Emperor", "Tarot", function(ctx, state)
+Sim._reg_cons("c_emperor", "The Emperor", "Tarot", function(ctx, state)
     local created = 0
     for _ = 1, 2 do
         if #state.consumables < state.consumable_slots then
@@ -158,7 +154,7 @@ _reg_cons("c_emperor", "The Emperor", "Tarot", function(ctx, state)
     return { created = created }
 end)
 
-_reg_cons("c_hierophant", "The Hierophant", "Tarot", function(ctx, state)
+Sim._reg_cons("c_hierophant", "The Hierophant", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local count = 0
     for _, idx in ipairs(ctx.selected) do
@@ -171,7 +167,7 @@ _reg_cons("c_hierophant", "The Hierophant", "Tarot", function(ctx, state)
     return { enhanced = count }
 end)
 
-_reg_cons("c_lovers", "The Lovers", "Tarot", function(ctx, state)
+Sim._reg_cons("c_lovers", "The Lovers", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local idx = ctx.selected[1]
     local c = state.hand[idx]
@@ -182,7 +178,7 @@ _reg_cons("c_lovers", "The Lovers", "Tarot", function(ctx, state)
     return nil
 end)
 
-_reg_cons("c_chariot", "The Chariot", "Tarot", function(ctx, state)
+Sim._reg_cons("c_chariot", "The Chariot", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local idx = ctx.selected[1]
     local c = state.hand[idx]
@@ -193,7 +189,7 @@ _reg_cons("c_chariot", "The Chariot", "Tarot", function(ctx, state)
     return nil
 end)
 
-_reg_cons("c_strength", "Strength", "Tarot", function(ctx, state)
+Sim._reg_cons("c_strength", "Strength", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local count = 0
     for _, idx in ipairs(ctx.selected) do
@@ -206,13 +202,13 @@ _reg_cons("c_strength", "Strength", "Tarot", function(ctx, state)
     return { enhanced = count }
 end)
 
-_reg_cons("c_hermit", "The Hermit", "Tarot", function(ctx, state)
+Sim._reg_cons("c_hermit", "The Hermit", "Tarot", function(ctx, state)
     local bonus = math.min(state.dollars, 20)
     state.dollars = state.dollars + bonus
     return { money = bonus }
 end)
 
-_reg_cons("c_wheel_of_fortune", "Wheel of Fortune", "Tarot", function(ctx, state)
+Sim._reg_cons("c_wheel_of_fortune", "Wheel of Fortune", "Tarot", function(ctx, state)
     if not state.jokers or #state.jokers == 0 then return nil end
     if Sim.RNG.next(state.rng) >= 0.25 then return nil end
     local ji = Sim.RNG.int(state.rng, 1, #state.jokers)
@@ -229,7 +225,7 @@ _reg_cons("c_wheel_of_fortune", "Wheel of Fortune", "Tarot", function(ctx, state
     return nil
 end)
 
-_reg_cons("c_justice", "Justice", "Tarot", function(ctx, state)
+Sim._reg_cons("c_justice", "Justice", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local idx = ctx.selected[1]
     local c = state.hand[idx]
@@ -240,7 +236,7 @@ _reg_cons("c_justice", "Justice", "Tarot", function(ctx, state)
     return nil
 end)
 
-_reg_cons("c_hanged_man", "The Hanged Man", "Tarot", function(ctx, state)
+Sim._reg_cons("c_hanged_man", "The Hanged Man", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local destroyed = 0
     local sorted = {}
@@ -256,7 +252,7 @@ _reg_cons("c_hanged_man", "The Hanged Man", "Tarot", function(ctx, state)
     return { destroyed = destroyed }
 end)
 
-_reg_cons("c_death", "Death", "Tarot", function(ctx, state)
+Sim._reg_cons("c_death", "Death", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected < 2 then return nil end
     local src = state.hand[ctx.selected[1]]
     local tgt_idx = ctx.selected[2]
@@ -274,7 +270,7 @@ _reg_cons("c_death", "Death", "Tarot", function(ctx, state)
     return nil
 end)
 
-_reg_cons("c_temperance", "Temperance", "Tarot", function(ctx, state)
+Sim._reg_cons("c_temperance", "Temperance", "Tarot", function(ctx, state)
     local total = 0
     if state.jokers then
         for _, jk in ipairs(state.jokers) do
@@ -287,7 +283,7 @@ _reg_cons("c_temperance", "Temperance", "Tarot", function(ctx, state)
     return { money = total }
 end)
 
-_reg_cons("c_devil", "The Devil", "Tarot", function(ctx, state)
+Sim._reg_cons("c_devil", "The Devil", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local idx = ctx.selected[1]
     local c = state.hand[idx]
@@ -298,7 +294,7 @@ _reg_cons("c_devil", "The Devil", "Tarot", function(ctx, state)
     return nil
 end)
 
-_reg_cons("c_tower", "The Tower", "Tarot", function(ctx, state)
+Sim._reg_cons("c_tower", "The Tower", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local idx = ctx.selected[1]
     local c = state.hand[idx]
@@ -309,7 +305,7 @@ _reg_cons("c_tower", "The Tower", "Tarot", function(ctx, state)
     return nil
 end)
 
-_reg_cons("c_star", "The Star", "Tarot", function(ctx, state)
+Sim._reg_cons("c_star", "The Star", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local count = 0
     for _, idx in ipairs(ctx.selected) do
@@ -322,7 +318,7 @@ _reg_cons("c_star", "The Star", "Tarot", function(ctx, state)
     return { changed = count }
 end)
 
-_reg_cons("c_moon", "The Moon", "Tarot", function(ctx, state)
+Sim._reg_cons("c_moon", "The Moon", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local count = 0
     for _, idx in ipairs(ctx.selected) do
@@ -335,7 +331,7 @@ _reg_cons("c_moon", "The Moon", "Tarot", function(ctx, state)
     return { changed = count }
 end)
 
-_reg_cons("c_sun", "The Sun", "Tarot", function(ctx, state)
+Sim._reg_cons("c_sun", "The Sun", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local count = 0
     for _, idx in ipairs(ctx.selected) do
@@ -348,7 +344,7 @@ _reg_cons("c_sun", "The Sun", "Tarot", function(ctx, state)
     return { changed = count }
 end)
 
-_reg_cons("c_world", "The World", "Tarot", function(ctx, state)
+Sim._reg_cons("c_world", "The World", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local count = 0
     for _, idx in ipairs(ctx.selected) do
@@ -363,7 +359,7 @@ end)
 
 -- === Spectral cards (16) ===
 
-_reg_cons("c_familiar", "Familiar", "Spectral", function(ctx, state)
+Sim._reg_cons("c_familiar", "Familiar", "Spectral", function(ctx, state)
     if not state.hand or #state.hand == 0 then return nil end
     -- Destroy 1 random card
     local di = Sim.RNG.int(state.rng, 1, #state.hand)
@@ -385,7 +381,7 @@ _reg_cons("c_familiar", "Familiar", "Spectral", function(ctx, state)
     return { created = created }
 end)
 
-_reg_cons("c_grim", "Grim", "Spectral", function(ctx, state)
+Sim._reg_cons("c_grim", "Grim", "Spectral", function(ctx, state)
     if not state.hand or #state.hand == 0 then return nil end
     -- Destroy 1 random card
     local di = Sim.RNG.int(state.rng, 1, #state.hand)
@@ -405,7 +401,7 @@ _reg_cons("c_grim", "Grim", "Spectral", function(ctx, state)
     return { created = created }
 end)
 
-_reg_cons("c_incantation", "Incantation", "Spectral", function(ctx, state)
+Sim._reg_cons("c_incantation", "Incantation", "Spectral", function(ctx, state)
     if not state.hand or #state.hand == 0 then return nil end
     -- Destroy 1 random card
     local di = Sim.RNG.int(state.rng, 1, #state.hand)
@@ -426,7 +422,7 @@ _reg_cons("c_incantation", "Incantation", "Spectral", function(ctx, state)
     return { created = created }
 end)
 
-_reg_cons("c_talisman", "Talisman", "Spectral", function(ctx, state)
+Sim._reg_cons("c_talisman", "Talisman", "Spectral", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local c = state.hand[ctx.selected[1]]
     if c then
@@ -436,7 +432,7 @@ _reg_cons("c_talisman", "Talisman", "Spectral", function(ctx, state)
     return nil
 end)
 
-_reg_cons("c_aura", "Aura", "Spectral", function(ctx, state)
+Sim._reg_cons("c_aura", "Aura", "Spectral", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local c = state.hand[ctx.selected[1]]
     if c and c.edition == 0 then
@@ -451,7 +447,7 @@ _reg_cons("c_aura", "Aura", "Spectral", function(ctx, state)
     return nil
 end)
 
-_reg_cons("c_wraith", "Wraith", "Spectral", function(ctx, state)
+Sim._reg_cons("c_wraith", "Wraith", "Spectral", function(ctx, state)
     -- Create 1 random Joker
     if #state.jokers >= state.joker_slots then return nil end
     local jid = Sim.RNG.pick(state.rng, Sim.JOKER_POOL)
@@ -464,7 +460,7 @@ _reg_cons("c_wraith", "Wraith", "Spectral", function(ctx, state)
     return { created = true }
 end)
 
-_reg_cons("c_sigil", "Sigil", "Spectral", function(ctx, state)
+Sim._reg_cons("c_sigil", "Sigil", "Spectral", function(ctx, state)
     local suit = Sim.RNG.int(state.rng, 1, 4)
     for _, c in ipairs(state.hand) do
         if c.enhancement ~= 6 then -- Skip Stone cards
@@ -474,7 +470,7 @@ _reg_cons("c_sigil", "Sigil", "Spectral", function(ctx, state)
     return { suit = suit }
 end)
 
-_reg_cons("c_ouija", "Ouija", "Spectral", function(ctx, state)
+Sim._reg_cons("c_ouija", "Ouija", "Spectral", function(ctx, state)
     local rank = Sim.RNG.int(state.rng, 2, 14)
     for _, c in ipairs(state.hand) do
         if c.enhancement ~= 6 then -- Skip Stone cards
@@ -486,7 +482,7 @@ _reg_cons("c_ouija", "Ouija", "Spectral", function(ctx, state)
     return { rank = rank }
 end)
 
-_reg_cons("c_ectoplasm", "Ectoplasm", "Spectral", function(ctx, state)
+Sim._reg_cons("c_ectoplasm", "Ectoplasm", "Spectral", function(ctx, state)
     -- Add Negative edition to a random Joker
     local eligible = {}
     for _, jk in ipairs(state.jokers) do
@@ -500,7 +496,7 @@ _reg_cons("c_ectoplasm", "Ectoplasm", "Spectral", function(ctx, state)
     return { edition = Sim.ENUMS.EDITION.NEGATIVE }
 end)
 
-_reg_cons("c_immolate", "Immolate", "Spectral", function(ctx, state)
+Sim._reg_cons("c_immolate", "Immolate", "Spectral", function(ctx, state)
     if not state.hand or #state.hand == 0 then return nil end
     -- Destroy 5 random cards
     local destroyed = 0
@@ -519,7 +515,7 @@ _reg_cons("c_immolate", "Immolate", "Spectral", function(ctx, state)
     return { destroyed = destroyed, money = 20 }
 end)
 
-_reg_cons("c_ankh", "Ankh", "Spectral", function(ctx, state)
+Sim._reg_cons("c_ankh", "Ankh", "Spectral", function(ctx, state)
     if not state.jokers or #state.jokers == 0 then return nil end
     -- Pick a random joker to copy
     local src = Sim.RNG.pick(state.rng, state.jokers)
@@ -535,7 +531,7 @@ _reg_cons("c_ankh", "Ankh", "Spectral", function(ctx, state)
     return { copied = true }
 end)
 
-_reg_cons("c_deja_vu", "Deja Vu", "Spectral", function(ctx, state)
+Sim._reg_cons("c_deja_vu", "Deja Vu", "Spectral", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local c = state.hand[ctx.selected[1]]
     if c then
@@ -545,7 +541,7 @@ _reg_cons("c_deja_vu", "Deja Vu", "Spectral", function(ctx, state)
     return nil
 end)
 
-_reg_cons("c_hex", "Hex", "Spectral", function(ctx, state)
+Sim._reg_cons("c_hex", "Hex", "Spectral", function(ctx, state)
     -- Add Polychrome to a random Joker
     local eligible = {}
     for _, jk in ipairs(state.jokers) do
@@ -559,7 +555,7 @@ _reg_cons("c_hex", "Hex", "Spectral", function(ctx, state)
     return { edition = Sim.ENUMS.EDITION.POLYCHROME }
 end)
 
-_reg_cons("c_trance", "Trance", "Spectral", function(ctx, state)
+Sim._reg_cons("c_trance", "Trance", "Spectral", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local c = state.hand[ctx.selected[1]]
     if c then
@@ -569,7 +565,7 @@ _reg_cons("c_trance", "Trance", "Spectral", function(ctx, state)
     return nil
 end)
 
-_reg_cons("c_medium", "Medium", "Spectral", function(ctx, state)
+Sim._reg_cons("c_medium", "Medium", "Spectral", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local c = state.hand[ctx.selected[1]]
     if c then
@@ -579,7 +575,7 @@ _reg_cons("c_medium", "Medium", "Spectral", function(ctx, state)
     return nil
 end)
 
-_reg_cons("c_cryptid", "Cryptid", "Spectral", function(ctx, state)
+Sim._reg_cons("c_cryptid", "Cryptid", "Spectral", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local src = state.hand[ctx.selected[1]]
     if not src then return nil end
@@ -601,11 +597,7 @@ for _, def in pairs(Sim.CONSUMABLE_DEFS) do
     Sim.CONS_POOL[#Sim.CONS_POOL + 1] = def.id
 end
 
--- ============================================================================
---  SECTION 6 — ADVANCED JOKERS
--- ============================================================================
-
-_reg_joker("j_sixth_sense", "Sixth Sense", 2, 6, function(ctx, st, jk)
+Sim._reg_joker("j_sixth_sense", "Sixth Sense", 2, 6, function(ctx, st, jk)
     if ctx.destroying_card then
         if not ctx.is_first_hand then return nil end
         if not ctx.full_hand or #ctx.full_hand ~= 1 then return nil end
@@ -622,12 +614,9 @@ _reg_joker("j_sixth_sense", "Sixth Sense", 2, 6, function(ctx, st, jk)
     end
 end)
 
-_reg_joker("j_hiker", "Hiker", 1, 5, function(ctx, st, jk)
-    if ctx.individual and ctx.cardarea == "play" then
-
-
-        ctx.other_card.perma_bonus = (ctx.other_card.perma_bonus or 0) + 4
-        return { chips = 0, message = "+4 permanent" }
+Sim._reg_joker("j_hiker", "Hiker", 2, 5, function(ctx, st, jk)
+    if ctx.individual and ctx.other_card then
+        ctx.other_card.perma_bonus = (ctx.other_card.perma_bonus or 0) + 5
     end
 end)
 
@@ -635,7 +624,3 @@ Sim.JOKER_POOL = {}
 for _, def in pairs(Sim.JOKER_DEFS) do
     Sim.JOKER_POOL[#Sim.JOKER_POOL + 1] = def.id
 end
-
--- ============================================================================
-
-

@@ -1,12 +1,12 @@
 -- src/06_evaluator.lua — Poker hand evaluator
--- Auto-split. Edit freely.
-
---  SECTION 7 — POKER HAND EVALUATOR
--- ============================================================================
 
 Sim.Eval = {}
 
-local function _cid(card) return card.enhancement == 6 and 0 or card.rank end
+local E = Sim.ENUMS
+local STONE = E.ENHANCEMENT.STONE
+local WILD = E.ENHANCEMENT.WILD
+
+local function _cid(card) return card.enhancement == STONE and 0 or card.rank end
 
 local function _x_same(num, hand)
     local counts = {}
@@ -29,23 +29,23 @@ local function _highest(hand)
     local fallback = hand[1]
     for i = 1, #hand do
         local c = hand[i]
-        if c.enhancement ~= 6 then
-            local v = Sim.ENUMS.RANK_NOMINAL[c.rank] + c.rank * 0.01
+        if c.enhancement ~= STONE then
+            local v = E.RANK_NOMINAL[c.rank] + c.rank * 0.01
             if v > bv then bv = v; best = c end
         end
     end
     return best and {best} or (fallback and {fallback} or {})
 end
 
-local function _is_wild(card) return card.enhancement == 3 end
-local function _is_stone(card) return card.enhancement == 6 end
+local function _is_wild(card) return card.enhancement == WILD end
+local function _is_stone(card) return card.enhancement == STONE end
 
 local function _flush(hand)
     if #hand ~= 5 then return {} end
     local suit = nil
     for i = 1, #hand do
-        if _is_wild(hand[i]) then -- Wild counts as any suit
-        elseif _is_stone(hand[i]) then return {} -- Stone breaks flush
+        if _is_wild(hand[i]) then
+        elseif _is_stone(hand[i]) then return {}
         else
             if not suit then suit = hand[i].suit
             elseif hand[i].suit ~= suit then return {} end
@@ -85,11 +85,11 @@ end
 --- Returns: best_type, scoring_cards, all_hands_table
 function Sim.Eval.get_hand(cards)
     if not cards or #cards == 0 then
-        return 12, {}, {}
+        return E.HAND_TYPE.HIGH_CARD, {}, {}
     end
     local _5, _4, _3, _2 = _x_same(5,cards), _x_same(4,cards), _x_same(3,cards), _x_same(2,cards)
     local _fl, _st, _hi = _flush(cards), _straight(cards), _highest(cards)
-    local HT = Sim.ENUMS.HAND_TYPE
+    local HT = E.HAND_TYPE
     local best, best_sc, all = HT.HIGH_CARD, _hi, {}
 
     if #_5 > 0 and #_fl > 0 then
@@ -150,7 +150,6 @@ function Sim.Eval.get_hand(cards)
         for _,c in ipairs(_2[1]) do tp[#tp+1]=c end
         for _,c in ipairs(_2[2]) do tp[#tp+1]=c end
 
-
         all[HT.TWO_PAIR] = tp
         if HT.TWO_PAIR < best then best = HT.TWO_PAIR; best_sc = tp end
         if not all[HT.PAIR] then all[HT.PAIR] = _2[1] end
@@ -162,7 +161,3 @@ function Sim.Eval.get_hand(cards)
     all[HT.HIGH_CARD] = _hi
     return best, best_sc, all
 end
-
--- ============================================================================
-
-

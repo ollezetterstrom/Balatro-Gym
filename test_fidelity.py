@@ -116,6 +116,25 @@ def run_fidelity_test(n_steps=1000, seed_prefix="FIDELITY"):
 
             obs_after = obs_to_list(lua_obs)
 
+            # Decode phase from one-hot at obs positions 72-74 (1-indexed Lua)
+            # Layout: 48 hand + 15 jokers + 8 global = positions 1-71
+            # Then 12 hand levels at 72-83, then phase at 84-86
+            # Wait — let me recount: n=0 hand→48, n=48 joker→63, n=63 global→71,
+            # n=71 levels→83, n=83 phase→86
+            # So phase one-hot is at Lua indices n+1=84, n+2=85, n+3=86? No.
+            # n=83, so n+1=84 in Lua. But that's wrong because n started at 0.
+            # Actually n=71 after hand levels. So phase starts at n=71, n+1=72.
+            # Let me just re-derive: after 8 global features n=71, then 12 levels n=83,
+            # then phase at n+1=84... no. n is the offset BEFORE writing.
+            # After globals: n=71. Level loop: o[72]..o[83], n becomes 83.
+            # Phase: o[84], o[85], o[86]. n becomes 86.
+            # YES: phase is at Lua indices 84, 85, 86.
+            def _decode_phase(obs_list):
+                if obs_list[83] >= 0.5: return 1  # Lua index 84 → Python 83
+                if obs_list[84] >= 0.5: return 2  # Lua index 85 → Python 84
+                if obs_list[85] >= 0.5: return 3  # Lua index 86 → Python 85
+                return 0
+
             records.append({
                 "episode": episode,
                 "step": step_in_ep,
@@ -124,8 +143,8 @@ def run_fidelity_test(n_steps=1000, seed_prefix="FIDELITY"):
                 "action_value": action[1],
                 "reward": float(reward),
                 "done": bool(done),
-                "phase_before": int(obs_before[83] * 2 + obs_before[84]),
-                "phase_after": int(obs_after[83] * obs_after[84] + obs_after[85]),
+                "phase_before": _decode_phase(obs_before),
+                "phase_after": _decode_phase(obs_after),
                 "chips_before": state.chips,
                 "ante": state.ante,
             })

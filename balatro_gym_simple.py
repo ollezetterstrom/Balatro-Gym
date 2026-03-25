@@ -43,26 +43,31 @@ class BalatroSimpleEnv(gym.Env):
 
     def __init__(self):
         super().__init__()
-        self.sim = _lua()           # Sim table
-        self._rt = _RUNTIME         # LuaRuntime (for execute)
+        self.sim = _lua()
+        self._rt = _RUNTIME
         self.E = self.sim.ENUMS
-        self.observation_space = spaces.Box(0.0, 1.0, shape=(129,), dtype=np.float32)
+        self.observation_space = spaces.Box(0.0, 2.0, shape=(129,), dtype=np.float32)
         self.action_space = spaces.Discrete(ACTION_SIZE)
         self._s = None
         self._steps = 0
+        self._max_steps = 500
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
         s = str(int(seed) if seed is not None else 0)
-        self._s = self._rt.execute(f"""
-            local rng = Sim.RNG.new("{s}")
-            local st = Sim.State.new({{rng=rng, seed="{s}",
-                jokers={{ {{id=1, edition=0, eternal=false, uid=1}} }} }})
+        self._s = self._rt.execute(
+            """
+            local seed_str = ...
+            local rng = Sim.RNG.new(seed_str)
+            local st = Sim.State.new({rng=rng, seed=seed_str,
+                jokers={ {id=1, edition=0, eternal=false, uid=1}} })
             Sim.Blind.init_ante(st)
             local bt = Sim.Blind.next_type(st)
             if bt then Sim.Blind.setup(st, bt); st.phase = 1 end
             return st
-        """)
+            """,
+            s,
+        )
         self._steps = 0
         return _obs(self.sim.Obs.encode(self._s)), {"ante": 1}
 
@@ -102,15 +107,18 @@ class BalatroSimpleEnv(gym.Env):
         if action == DISCARD_ACT:
             if s.discards_left > 0 and len(s.hand) >= 1:
                 n = min(5, len(s.hand))
-                self._rt.execute(f"""
-                    local st = ...
-                    for i = {n}, 1, -1 do
+                self._rt.execute(
+                    """
+                    local st, n = ...
+                    for i = n, 1, -1 do
                         local c = table.remove(st.hand, i)
                         if c then st.discard[#st.discard+1] = c end
                     end
                     st.discards_left = st.discards_left - 1
                     Sim.State.draw(st)
-                """, s)
+                    """,
+                    s, n,
+                )
         elif action < NUM_PLAY:
             combo = ALL_COMBOS[action]
             if all(i < len(s.hand) for i in combo):
@@ -118,16 +126,17 @@ class BalatroSimpleEnv(gym.Env):
             else:
                 r = -0.1
 
-        done = s.phase in (E.PHASE.GAME_OVER, E.PHASE.WIN) or self._steps > 500
+        done = s.phase in (E.PHASE.GAME_OVER, E.PHASE.WIN) or self._steps > self._max_steps
         return _obs(self.sim.Obs.encode(s)), r, done, False, {"ante": s.ante}
 
     def _play(self, state, combo):
-        # Use Lua for hand manipulation (avoids Python↔Lua table issues)
-        combo_str = ",".join(str(i + 1) for i in combo)  # 1-indexed for Lua
-        result = self._rt.execute(f"""
-            local st = ...
-            local indices = {{ {combo_str} }}
-            local played = {{}}
+        combo_str = ",".join(str(i + 1) for i in combo)
+        result = self._rt.execute(
+            """
+            local st, combo_str = ...
+            local indices = {}
+            for w in combo_str:gmatch("%d+") do indices[#indices+1] = tonumber(w) end
+            local played = {}
             for _, idx in ipairs(indices) do played[#played+1] = st.hand[idx] end
 
             local total, chips, mult, ht = Sim.Engine.calculate(st, played)
@@ -146,11 +155,14 @@ class BalatroSimpleEnv(gym.Env):
             if st.chips >= st.blind_chips then st.blind_beaten = true end
 
             return total
-        """, state)
+            """,
+            state, combo_str,
+        )
         return max(0.01, float(np.log(max(1, result))) * 0.01 - 0.05 * state.hands_played)
 
     def _auto_shop(self, s):
-        self._rt.execute("""
+        self._rt.execute(
+            """
             local st = ...
             local shop = st.shop
             if shop then
@@ -167,10 +179,13 @@ class BalatroSimpleEnv(gym.Env):
             st.shop = nil
             local bt = Sim.Blind.next_type(st)
             if bt then Sim.Blind.setup(st, bt); st.phase = Sim.ENUMS.PHASE.SELECTING_HAND end
-        """, s)
+            """,
+            s,
+        )
 
     def _advance(self, s):
-        self._rt.execute("""
+        self._rt.execute(
+            """
             local st = ...
             local E = Sim.ENUMS
             local names = {"Small","Big","Boss"}
@@ -187,7 +202,6 @@ class BalatroSimpleEnv(gym.Env):
                 if st.ante > 8 then st.phase = E.PHASE.WIN; return end
                 Sim.Blind.init_ante(st)
                 nb = Sim.Blind.next_type(st)
-                -- auto shop
                 local shop = st.shop
                 if shop then
                     for si = 1, 2 do
@@ -204,7 +218,9 @@ class BalatroSimpleEnv(gym.Env):
             end
             Sim.Blind.setup(st, nb)
             st.phase = E.PHASE.SELECTING_HAND
-        """, s)
+            """,
+            s,
+        )
 
     def render(self):
         if self._s:

@@ -14,7 +14,6 @@ Usage:
 """
 
 from __future__ import annotations
-import os
 from pathlib import Path
 
 import gymnasium as gym
@@ -42,7 +41,6 @@ def _get_lua():
     # Find balatro_sim.lua next to this file
     lua_path = Path(__file__).parent / "balatro_sim.lua"
     if not lua_path.exists():
-        # Fallback: try current directory
         lua_path = Path("balatro_sim.lua")
     if not lua_path.exists():
         raise FileNotFoundError(
@@ -57,7 +55,7 @@ def _get_lua():
 
 
 # ---------------------------------------------------------------------------
-# Lua ↔ Python conversion helpers
+# Lua <-> Python conversion helpers
 # ---------------------------------------------------------------------------
 
 
@@ -66,7 +64,6 @@ def _lua_table_to_list(table, length=None):
     if table is None:
         return []
     if length is None:
-        # Try to detect length
         try:
             length = len(table)
         except TypeError:
@@ -114,18 +111,16 @@ class BalatroEnv(gym.Env):
         self.sim = _get_lua()
         self.lua_env = self.sim.Env
 
-        # Spaces
+        # Observation bound: hand_levels log encoding can reach ~1.3 at level 100
         self.observation_space = spaces.Box(
-            low=0.0, high=1.0, shape=(129,), dtype=np.float32
+            low=0.0, high=2.0, shape=(129,), dtype=np.float32
         )
-        self.action_space = spaces.MultiDiscrete([7, 65536])  # 0-6 for type, 0-65535 for value
+        self.action_space = spaces.MultiDiscrete([7, 65536])
 
-        # Internal state (Lua table reference)
         self._lua_state = None
         self._seed = seed
 
     def reset(self, *, seed=None, options=None):
-        # Gymnasium requires integer seed; our Lua engine uses string seeds
         if seed is not None:
             seed = int(seed)
         super().reset(seed=seed)
@@ -133,27 +128,31 @@ class BalatroEnv(gym.Env):
         lua_seed = str(seed if seed is not None else self._seed or 42)
         lua_obs, lua_info = self.lua_env.reset(lua_seed)
 
-        self._lua_state = self._get_current_state(lua_seed)
+        self._lua_state = self._build_state(lua_seed)
 
         obs = _obs_to_numpy(lua_obs)
         info = {"seed": lua_seed, "ante": 1}
         return obs, info
 
-    def _get_current_state(self, seed_str):
-        """Create state entirely in Lua (avoids Python→Lua table issues)."""
+    def _build_state(self, seed_str):
+        """Build state in Lua by calling the engine's reset/init sequence."""
         runtime = _LUA_RUNTIME
-        lua_code = f"""
-        local rng = Sim.RNG.new("{seed_str}")
-        local state = Sim.State.new({{rng = rng, seed = "{seed_str}"}})
-        Sim.Blind.init_ante(state)
-        local btype = Sim.Blind.next_type(state)
-        if btype then
-            Sim.Blind.setup(state, btype)
-            state.phase = Sim.ENUMS.PHASE.SELECTING_HAND
-        end
-        return state
-        """
-        return runtime.execute(lua_code)
+        # Pass seed as argument to avoid f-string injection
+        return runtime.execute(
+            """
+            local seed_str = ...
+            local rng = Sim.RNG.new(seed_str)
+            local state = Sim.State.new({rng = rng, seed = seed_str})
+            Sim.Blind.init_ante(state)
+            local btype = Sim.Blind.next_type(state)
+            if btype then
+                Sim.Blind.setup(state, btype)
+                state.phase = Sim.ENUMS.PHASE.SELECTING_HAND
+            end
+            return state
+            """,
+            seed_str,
+        )
 
     def step(self, action):
         if self._lua_state is None:
@@ -162,9 +161,14 @@ class BalatroEnv(gym.Env):
         action_type = int(action[0])
         action_value = int(action[1])
 
-        lua_obs, reward, done = self.lua_env.step(
-            self._lua_state, action_type, action_value
-        )
+        try:
+            lua_obs, reward, done = self.lua_env.step(
+                self._lua_state, action_type, action_value
+            )
+        except Exception as e:
+            # Return terminal state on Lua errors to avoid crashing training
+            obs = _obs_to_numpy({})
+            return obs, -100.0, True, False, {"error": str(e)}
 
         obs = _obs_to_numpy(lua_obs)
         truncated = False
@@ -182,7 +186,6 @@ class BalatroEnv(gym.Env):
             return
         if self._lua_state is None:
             return
-        # Use Lua's state summary if available
         print(f"Ante {self._lua_state.ante} | "
               f"${self._lua_state.dollars} | "
               f"Chips: {self._lua_state.chips}/{self._lua_state.blind_chips} | "
@@ -219,7 +222,6 @@ if __name__ == "__main__":
     print(f"Observation shape: {obs.shape}")
     print(f"Info: {info}")
 
-    # Play 5 random actions
     for step in range(5):
         action = env.action_space.sample()
         obs, reward, done, trunc, info = env.step(action)

@@ -1,8 +1,4 @@
 -- src/09_blinds.lua — Blind system, boss blinds
--- Auto-split. Edit freely.
-
---  SECTION 8 — BLIND SYSTEM
--- ============================================================================
 
 Sim.Blind = {}
 local BLIND_DATA = {
@@ -11,17 +7,17 @@ local BLIND_DATA = {
     {name="Boss",  mult=2.0, reward=5},
 }
 
--- Boss blind pool (name, chip_mult_override, setup_fn)
--- setup_fn(state) runs when the boss is set, applies debuffs/penalties
+local SUIT = Sim.ENUMS.SUIT
+
 Sim.BOSS_BLINDS = {
     { name = "The Wall",     chip_mult = 2.0, setup = function(st) end },
     { name = "The Arm",      chip_mult = 1.0, setup = function(st) end },
     { name = "The Water",    chip_mult = 1.0, setup = function(st) st.discards_left = 0 end },
     { name = "The Manacle",  chip_mult = 1.0, setup = function(st) st.hand_limit = st.hand_limit - 1 end },
     { name = "The Needle",   chip_mult = 1.0, setup = function(st) st.hands_left = 1 end },
-    { name = "The Club",     chip_mult = 1.0, setup = function(st) st._boss_debuff_suit = 3 end },
-    { name = "The Goad",     chip_mult = 1.0, setup = function(st) st._boss_debuff_suit = 1 end },
-    { name = "The Window",   chip_mult = 1.0, setup = function(st) st._boss_debuff_suit = 4 end },
+    { name = "The Club",     chip_mult = 1.0, setup = function(st) st._boss_debuff_suit = SUIT.CLUBS end },
+    { name = "The Goad",     chip_mult = 1.0, setup = function(st) st._boss_debuff_suit = SUIT.SPADES end },
+    { name = "The Window",   chip_mult = 1.0, setup = function(st) st._boss_debuff_suit = SUIT.DIAMONDS end },
 }
 
 function Sim.Blind.pick_boss(state, ante)
@@ -78,12 +74,13 @@ function Sim.Blind.chips(ante, btype)
     local base = ante <= 8 and amounts[ante] or amounts[8]
     return math.floor(base * BLIND_DATA[btype].mult)
 end
+
 function Sim.Blind.name(btype) return BLIND_DATA[btype].name end
 function Sim.Blind.reward(btype) return BLIND_DATA[btype].reward end
 
 function Sim.Blind.setup(state, btype)
-    -- Restore defaults (boss effects from previous round are cleared)
-    state.hand_limit = D.hand_size
+    local defs = Sim.DEFAULTS
+    state.hand_limit = defs.hand_size
     state._boss_debuff_suit = nil
     state.boss_name = nil
 
@@ -91,13 +88,12 @@ function Sim.Blind.setup(state, btype)
     state.blind_chips = Sim.Blind.chips(state.ante, btype)
     state.blind_beaten = false
     state.chips = 0
-    state.hands_left = D.hands
-    state.discards_left = D.discards
+    state.hands_left = defs.hands
+    state.discards_left = defs.discards
     state.hands_played = 0
     state.round = state.round + 1
     state.selection = {}
 
-    -- Boss blind: pick specific boss and apply effects
     if btype == 3 then
         local boss = Sim.Blind.pick_boss(state, state.ante)
         state.boss_name = boss.name
@@ -132,7 +128,3 @@ function Sim.Blind.mark_done(state, btype, skipped)
     local names = {"Small","Big","Boss"}
     state._blind_states[names[btype]] = skipped and "skipped" or "done"
 end
-
--- ============================================================================
-
-

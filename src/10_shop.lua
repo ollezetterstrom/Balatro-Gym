@@ -1,8 +1,4 @@
 -- src/10_shop.lua — Shop, economy, packs
--- Auto-split. Edit freely.
-
---  SECTION 9 — SHOP & ECONOMY
--- ============================================================================
 
 Sim.Shop = {}
 
@@ -27,16 +23,18 @@ end
 function Sim.Shop.reroll(state)
     if not state.shop then return state end
     local pool = Sim.JOKER_POOL
+    -- Replace all joker slots with new random jokers
     for i = 1, 2 do
-        if not state.shop.jokers[i] then
-            local jid = Sim.RNG.pick(state.rng, pool)
-            local def = Sim._JOKER_BY_ID[jid]
-            state.shop.jokers[i] = { joker_id = jid, cost = def.cost or 3, slot = i }
-        end
+        local jid = Sim.RNG.pick(state.rng, pool)
+        local def = Sim._JOKER_BY_ID[jid]
+        state.shop.jokers[i] = { joker_id = jid, cost = def.cost or 3, slot = i }
     end
-    if not state.shop.consumable and #state.consumables < state.consumable_slots then
+    -- Replace consumable slot if room
+    if #state.consumables < state.consumable_slots then
         local cid = Sim.RNG.pick(state.rng, Sim.CONS_POOL)
         state.shop.consumable = { cons_id = cid, cost = 0, slot = 4 }
+    else
+        state.shop.consumable = nil
     end
     return state
 end
@@ -113,7 +111,3 @@ function Sim.Shop.skip_pack(state)
     state._prev_phase = nil
     return true
 end
-
--- ============================================================================
-
-
