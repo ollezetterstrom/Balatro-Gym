@@ -72,3 +72,5 @@ checkpoints/
 logs/
 runs/
 *.json.gz
+
+# Generated reference file\joker_stubs.lua
