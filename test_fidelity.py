@@ -38,7 +38,7 @@ def load_lua_engine():
         return lua.execute(f.read())
 
 
-def obs_to_list(lua_obs, dim=129):
+def obs_to_list(lua_obs, dim=180):
     """Convert Lua observation table to Python list."""
     return [float(lua_obs[i + 1] or 0.0) for i in range(dim)]
 

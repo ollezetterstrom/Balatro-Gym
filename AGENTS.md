@@ -114,7 +114,7 @@ These files are on Olle's machine at `C:\Users\ozett\Downloads\Balatro-SteamRIP.
 2. **Don't use `replaceAll` for edits** — it hits function declarations too, creating `Sim.Sim._name`.
 3. **Joker IDs change when new jokers are added.** Tests should use `Sim.JOKER_DEFS["key"].id` not hardcoded IDs.
 4. **`build.py` module ranges are stale** — don't trust them, the loader approach makes them irrelevant.
-5. **Observation space is 129 floats, not 124.** The old monolith had wrong comments.
+5. **Observation space is 180 floats, not 129.** Includes debuff status, deck composition, boss state.
 6. **HAND_BASE l_chips for Pair is 15** (not 20). Matches real game.
 7. **Hiker gives +5 perma_bonus** (not +4). Matches real game.
 8. **Lua 5.3+ required** — uses `>>`, `~`, `&` bitwise operators.

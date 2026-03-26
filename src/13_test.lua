@@ -45,11 +45,11 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
 
     -- Test: Observation dim
     local obs = Sim.Obs.encode(s)
-    test("Observation dim = 129", #obs == 129)
+    test("Observation dim = 180", #obs == 180)
 
     -- Test: Env reset
     obs, info = Sim.Env.reset("TEST_SEED")
-    test("Env.reset returns obs", #obs == 129 and info.ante == 1)
+    test("Env.reset returns obs", #obs == 180 and info.ante == 1)
 
     -- Test: Burnt Joker
     local burnt_id = J["j_burnt_joker"].id

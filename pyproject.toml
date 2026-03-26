@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "balatro-gym"
+version = "0.1.0"
+description = "Headless Balatro simulation engine with Gymnasium RL bindings"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "Olle Zetterström" },
+]
+keywords = ["balatro", "reinforcement-learning", "gymnasium", "card-game", "simulation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Lua",
+]
+dependencies = [
+    "gymnasium>=0.26",
+    "numpy>=1.21",
+    "lupa>=2.0",
+]
+
+[project.optional-dependencies]
+train = [
+    "stable-baselines3>=2.0",
+    "tensorboard",
+]
+dev = [
+    "pytest",
+]
+
+[project.urls]
+Repository = "https://github.com/ollezetterstrom/Balatro-Gym"
+
+[tool.setuptools]
+py-modules = ["balatro_gym", "balatro_gym_simple", "train", "test_fidelity"]
+
+[tool.setuptools.package-data]
+"*" = ["*.lua"]

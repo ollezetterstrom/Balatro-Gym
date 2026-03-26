@@ -49,12 +49,15 @@ def merge():
         if not fpath.exists():
             print(f"  MISSING: {name}")
             sys.exit(1)
-        with open(fpath) as fh:
+        with open(fpath, encoding="utf-8") as fh:
             content = fh.read()
         # Strip the first line header comment (-- src/NN_name.lua — ...)
         lines = content.split("\n")
         if lines and lines[0].startswith("-- src/"):
             lines = lines[1:]
+        # Strip trailing 'return Sim' from header module (only needed for dofile loader)
+        if name == "00_header.lua":
+            lines = [l for l in lines if not l.strip().startswith("return Sim")]
         stripped = "\n".join(lines)
         chunks.append(stripped)
         total_lines += stripped.count("\n") + 1
@@ -80,10 +83,10 @@ def merge():
 """
 
     merged = header + "\n".join(chunks) + "\n"
-    with open(MONOLITH, "w") as f:
+    with open(MONOLITH, "w", encoding="utf-8") as f:
         f.write(merged)
 
-    print(f"Merged {len(chunks)} files → {MONOLITH.name} ({total_lines} lines)")
+    print(f"Merged {len(chunks)} files -> {MONOLITH.name} ({total_lines} lines)")
 
 
 def check():
@@ -93,7 +96,7 @@ def check():
     for name in MODULES:
         fpath = SRC / name
         if fpath.exists():
-            with open(fpath) as fh:
+            with open(fpath, encoding="utf-8") as fh:
                 n = sum(1 for _ in fh)
             print(f"  [OK]   {name:30s} ({n} lines)")
         else:

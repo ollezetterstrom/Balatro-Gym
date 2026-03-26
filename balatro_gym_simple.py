@@ -33,8 +33,8 @@ def _lua():
     return _SIM
 
 def _obs(o):
-    a = np.zeros(129, dtype=np.float32)
-    for i in range(129):
+    a = np.zeros(180, dtype=np.float32)
+    for i in range(180):
         v = o[i + 1]; a[i] = float(v) if v is not None else 0.0
     return a
 
@@ -46,7 +46,7 @@ class BalatroSimpleEnv(gym.Env):
         self.sim = _lua()
         self._rt = _RUNTIME
         self.E = self.sim.ENUMS
-        self.observation_space = spaces.Box(0.0, 2.0, shape=(129,), dtype=np.float32)
+        self.observation_space = spaces.Box(0.0, 2.0, shape=(180,), dtype=np.float32)
         self.action_space = spaces.Discrete(ACTION_SIZE)
         self._s = None
         self._steps = 0

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-lua:
+    name: Lua Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua 5.4
+        uses: luarocks/actions/setup-lua@v1
+        with:
+          luaVersion: "5.4"
+
+      - name: Run scoring validation (49 tests)
+        run: lua validate.lua
+
+      - name: Run self-tests (45 tests)
+        run: lua -e "_SIM_RUN_TESTS=true" balatro_sim.lua
+
+  test-python:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Test Gymnasium wrapper
+        run: python test_wrapper.py
+
+      - name: Test simplified wrapper
+        run: python test_simple_wrapper.py

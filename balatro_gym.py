@@ -73,7 +73,7 @@ def _lua_table_to_list(table, length=None):
     return [table[i + 1] for i in range(length)]
 
 
-def _obs_to_numpy(lua_obs, dim=129):
+def _obs_to_numpy(lua_obs, dim=180):
     """Convert Lua observation table to numpy float32 array."""
     arr = np.zeros(dim, dtype=np.float32)
     for i in range(dim):
@@ -92,7 +92,8 @@ class BalatroEnv(gym.Env):
     Gymnasium environment wrapping the Balatro Lua simulation engine.
 
     Observation:
-        Box(129,) — flat float32 vector encoding hand, jokers, game state.
+        Box(180,) — flat float32 vector encoding hand, jokers, game state,
+        deck composition, debuff status, blind state.
 
     Action:
         MultiDiscrete([6, 65536])
@@ -113,9 +114,9 @@ class BalatroEnv(gym.Env):
         self.sim = _get_lua()
         self.lua_env = self.sim.Env
 
-        # Observation bound: hand_levels log encoding can reach ~1.3 at level 100
+        # Observation: 180 floats (see 11_observation.lua for layout)
         self.observation_space = spaces.Box(
-            low=0.0, high=2.0, shape=(129,), dtype=np.float32
+            low=0.0, high=2.0, shape=(180,), dtype=np.float32
         )
         self.action_space = spaces.MultiDiscrete([7, 65536])
 

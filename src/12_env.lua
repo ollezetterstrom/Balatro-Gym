@@ -3,7 +3,7 @@
 Sim.Env = {}
 Sim.Env.action_spec = {
     types = { "SELECT_CARDS","PLAY_DISCARD","SHOP_ACTION","USE_CONSUMABLE","PHASE_ACTION" },
-    obs_dim = 129,
+    obs_dim = 180,
 }
 
 local E = Sim.ENUMS
