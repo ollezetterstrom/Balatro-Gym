@@ -167,7 +167,7 @@ A working headless Balatro simulation engine with a Gymnasium wrapper, ready for
 | Language | Lua (portable, fast) | Python only |
 | Dependencies | zero | numpy, gymnasium, poetry |
 | Gym wrapper | ✓ | ✓ |
-| Jokers | 28 (all common/uncommon) | stubs |
+| Jokers | 147 (registered), ~50 (working behavior) | stubs |
 | Consumables | 49 (planets, tarots, spectrals) | none |
 | Boss blinds | 8 (with rotation) | stubs |
 | Full game loop | ✓ (shop, packs, blinds) | simplified |
