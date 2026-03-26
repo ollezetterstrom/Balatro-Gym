@@ -8,13 +8,19 @@ Repo: https://github.com/ollezetterstrom/Balatro-Gym
 
 ## Current State (March 2026)
 
-- **147 jokers** registered with correct names/costs/rarity from real game's `game.lua`
-- **~50 jokers** have working scoring behavior, rest have `-- TODO` stubs
+- **145 jokers** registered with correct names/costs/rarity from real game's `game.lua`
+- **~100 jokers** have working scoring behavior, 45 have stub implementations
 - **49/49** scoring validation tests pass (`lua validate.lua`)
 - **45/45** self-tests pass (`lua -e '_SIM_RUN_TESTS=true' balatro_sim.lua`)
 - **1019/1019** cross-validation vs real game source (requires local game files)
 - **12 hand types** evaluated identically to real Balatro
 - **8 boss blinds**, 49 consumables (12 planets, 21 tarots, 16 spectrals)
+- **180-dim observation** with deck composition, debuff status, boss state
+- **Four Fingers, Shortcut, Splash** evaluator jokers implemented
+- **Context hooks**: setting_blind, selling_card, open_booster, ending_shop
+- **CI**: GitHub Actions runs Lua + Python tests on push/PR
+- **pip install**: `pyproject.toml` for `pip install -e .`
+- **`translate_jokers.py`**: extracts real game joker code as reference for stubs
 
 ## Architecture
 

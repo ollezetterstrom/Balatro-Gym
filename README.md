@@ -14,8 +14,11 @@ cd Balatro-Gym
 lua -e '_SIM_RUN_TESTS=true' balatro_sim.lua  # 45 self-tests
 lua validate.lua                              # 49 scoring tests against real Balatro
 
-# Train an agent (requires pip install)
-pip install lupa gymnasium numpy stable-baselines3
+# Install for training
+pip install -e .                        # gymnasium, lupa, numpy
+pip install -e ".[train]"               # + stable-baselines3, tensorboard
+
+# Train an agent
 python3 train.py               # train PPO, then compare vs random
 ```
 
@@ -35,36 +38,41 @@ Every poker hand type is evaluated identically to Balatro's actual engine. Every
 
 ```
 .
-├── balatro_sim.lua          Module loader (40 lines, loads from src/)
+├── balatro_sim.lua          Module loader (loads from src/)
 ├── balatro_gym.py           Python Gymnasium wrapper (requires lupa)
 ├── balatro_gym_simple.py    Simplified 247-action wrapper
 ├── train.py                 PPO training script
 ├── test_fidelity.py         State-transition recorder for Rust parity
+├── test_wrapper.py          CI smoke test for full wrapper
+├── test_simple_wrapper.py   CI smoke test for simple wrapper
 ├── build.py                 Merge src/*.lua into single file
+├── translate_jokers.py      Extract joker logic from real game source
+├── pyproject.toml           Python packaging (pip install -e .)
 ├── validate.lua             49 known-answer scoring tests
 ├── cross_validate.lua       Evaluator parity tests vs real game
-├── requirements.txt         Python deps (gymnasium, lupa, numpy)
+├── requirements.txt         Python deps
+├── .github/workflows/ci.yml GitHub Actions (Lua + Python tests)
 └── src/                     Source modules (edit these)
     ├── 00_header.lua        Sim table + docstring
     ├── 01_enums.lua         Constants, hand stats, defaults
     ├── 02_rng.lua           Deterministic LCG
     ├── 03_cards.lua         Card constructor, deck builder
-    ├── 04_jokers.lua        147 joker definitions + behaviors
+    ├── 04_jokers.lua        145 joker definitions + behaviors
     ├── 05_consumables.lua   49 consumables (12 planets, 21 tarots, 16 spectrals)
     ├── 06_evaluator.lua     Poker hand evaluator (12 hand types)
     ├── 07_engine.lua        Scoring engine
     ├── 08_state.lua         Game state, draw, discard
     ├── 09_blinds.lua        Blinds + 8 boss blinds
     ├── 10_shop.lua          Shop, packs, economy
-    ├── 11_observation.lua   129-float observation encoder
-    ├── 12_env.lua           Gymnasium env (reset/step)
+    ├── 11_observation.lua   180-float observation encoder
+    ├── 12_env.lua           Gymnasium env (reset/step) + helper functions
     └── 13_test.lua          45 self-tests + random agent
 ```
 
 ## Features
 
 ### Poker evaluator
-All 12 hand types (High Card through Flush Five). Cascade logic matches real game: Four of a Kind also scores Pair, but Full House does NOT cascade Three of a Kind. Wild Cards, Stone Cards.
+All 12 hand types (High Card through Flush Five). Cascade logic matches real game: Four of a Kind also scores Pair, but Full House does NOT cascade Three of a Kind. Wild Cards, Stone Cards. Four Fingers (4-card flush/straight), Shortcut (skip-rank straights), Splash (all played cards score).
 
 ### Scoring
 ```
@@ -72,11 +80,16 @@ total = floor((base_chips + card_chips + joker_chips) × (base_mult × card_mult
 ```
 Card enhancements, editions, seals, joker effects, hand leveling.
 
-### Jokers (147)
+### Jokers (145)
 
-147 jokers from the real game with correct names, costs, and rarity. ~50 have working scoring behavior (suit bonuses, type bonuses, Xmult, chip scaling, held-in-hand effects). Remaining jokers register with correct data but have `-- TODO` behavior stubs.
+145 jokers from the real game with correct names, costs, and rarity. ~100 have working scoring behavior. 45 have stub implementations (register with correct data but no scoring effect).
 
-Working examples: Joker (+4 Mult), Greedy (+3 per Diamond), The Duo (×2 on Pair), Blueprint (copy neighbor), Hiker (+5 permabuff), Ramen (×2 decaying), Acrobat (×3 last hand), Fibonacci (+8 on A/2/3/5/8), Blackboard (×3 all dark), Supernova (+Mult = times played), and many more.
+Working examples: Joker (+4 Mult), Greedy (+3 per Diamond), The Duo (×2 on Pair), Blueprint (copy neighbor), Hiker (+5 permabuff), Ramen (×2 decaying), Acrobat (×3 last hand), Fibonacci (+8 on A/2/3/5/8), Blackboard (×3 all dark), Supernova (+Mult = times played), Photograph (×2 first face), Bloodstone (1/2 ×1.5 per Heart), and many more.
+
+Use `translate_jokers.py` to get the real game code as a reference for implementing stub jokers:
+```bash
+python translate_jokers.py --game-dir path/to/Balatro --output joker_stubs.lua
+```
 
 ### Boss blinds (8)
 
@@ -114,22 +127,29 @@ Red (re-trigger), Gold (+$3 on score), Blue (create planet at round end), Purple
 - Shop: 2 jokers + booster + consumable
 - Packs: nested phase, 3 joker choices
 - Deck management: draw, discard, rebuild
+- Context hooks: setting_blind, selling_card, open_booster, ending_shop
 
-## Observation (129 floats, 1-indexed Lua)
+## Observation (180 floats, 1-indexed Lua)
 
 | Index | Feature | Encoding |
 |-------|---------|----------|
-| 1–48 | 8 hand slots | `[rank/14, suit/4, enhance/8, edition/4, seal/4, has_card]` |
-| 49–63 | 5 joker slots | `[id/pool, edition/4, has_joker]` |
-| 64–71 | 8 global | chips%, $, hands, discards, ante, round, blind_beaten, deck% |
-| 72–83 | 12 hand levels | log-scaled, capped at 1.0 |
-| 84–86 | Phase | one-hot: SELECTING, SHOP, PACK_OPEN |
-| 87 | Selection count | / 8 |
-| 88–91 | 2 consumable slots | `[id/pool, has_consumable]` |
-| 92 | Pack open flag | 0 or 1 |
-| 93–122 | 5 pack slots | same encoding as hand cards |
-| 123–126 | Shop flags | joker1, joker2, booster, consumable present |
-| 127–129 | Counts | joker count/5, cons count/2, spare |
+| 1–56 | 8 hand slots | `[rank/14, suit/4, enhance/8, edition/4, seal/4, debuffed, has_card]` |
+| 57–71 | 5 joker slots | `[id/pool, edition/4, has_joker]` |
+| 72–81 | 10 global | chips%, $, hands, discards, ante, round, blind_beaten, deck%, total_chips%, hands_played |
+| 82–93 | 12 hand levels | log-scaled, capped at 1.0 |
+| 94–96 | Phase | one-hot: SELECTING, SHOP, PACK_OPEN |
+| 97 | Selection count | / 8 |
+| 98–101 | 2 consumable slots | `[id/pool, has_consumable]` |
+| 102 | Pack open flag | 0 or 1 |
+| 103–132 | 5 pack slots | same encoding as hand cards |
+| 133–136 | Shop flags | joker1, joker2, booster, consumable present |
+| 137–138 | Counts | joker count/5, cons count/2 |
+| 139–151 | Deck ranks | 13 rank counts (2–Ace) / 4 each |
+| 152–155 | Deck suits | 4 suit counts / 13 each |
+| 156 | Boss active | 0 or 1 |
+| 157 | Boss chip mult | normalized boss multiplier |
+| 158–160 | Blind states | 3 (Small/Big/Boss: 0=pending, 0.5=skipped, 1=done) |
+| 161–180 | Spare | reserved for future use |
 
 ## Action space
 
@@ -161,21 +181,23 @@ Run `lua validate.lua` to verify scoring still works.
 Edit files in `src/`, then test:
 
 ```bash
-lua validate.lua                        # scoring correctness
-lua -e '_SIM_RUN_TESTS=true' balatro_sim.lua  # self-tests
+lua validate.lua                        # scoring correctness (49 tests)
+lua -e '_SIM_RUN_TESTS=true' balatro_sim.lua  # self-tests (45 tests)
 ```
 
 For distribution (single file):
 
 ```bash
-python3 build.py merge      # src/*.lua → balatro_sim.lua
+python3 build.py merge      # src/*.lua -> balatro_sim.lua
 ```
+
+CI runs automatically on push via GitHub Actions (`.github/workflows/ci.yml`).
 
 ## Python bridge
 
 ```bash
-pip install -r requirements.txt
-python balatro_gym.py       # quick test
+pip install -e .              # or: pip install -r requirements.txt
+python balatro_gym.py         # quick test
 ```
 
 ```python
@@ -205,12 +227,13 @@ Saves `(state, action, next_state, reward)` tuples. When building the Rust port,
 
 ## Roadmap
 
-1. **Engine** — Core scoring, 147 jokers, 8 boss blinds, shop, packs
-2. **Python bridge** — lupa wrapper, Gymnasium env
-3. **Full joker behaviors** — Implement remaining ~100 TODO jokers
-4. **More bosses** — 25+ boss blinds from real game
-5. **Rust port** — Hot-path evaluator, JSON state contract
-6. **Training** — PPO experiments, reward shaping
+1. **Engine** — Core scoring, 145 jokers, 8 boss blinds, shop, packs, consumables
+2. **Python bridge** — lupa wrapper, Gymnasium env, pip install, CI
+3. **Full joker behaviors** — ~100 working, ~45 stubs remaining (`translate_jokers.py` extracts real game code as reference)
+4. **More bosses** — 25+ boss blinds from real game (currently 8)
+5. **Voucher system** — permanent upgrades from shop
+6. **Rust port** — Hot-path evaluator, JSON state contract
+7. **Training** — PPO experiments, reward shaping
 
 See [roadmap.md](roadmap.md).
 
