@@ -24,7 +24,7 @@ python3 train.py               # train PPO, then compare vs random
 | Test suite | Tests | Result | Requires |
 |-----------|-------|--------|----------|
 | `validate.lua` | 49 known-answer scoring tests | 49/49 | — |
-| Self-tests | Joker effects, consumables, env integration | 45/5 | — |
+| Self-tests | Joker effects, consumables, env integration | 45/45 | — |
 | `cross_validate.lua` | 1019 hand evaluations vs real Balatro source | 1019/1019 | game files¹ |
 
 Every poker hand type is evaluated identically to Balatro's actual engine. Every scoring calculation matches known game values. All joker data (names, costs, rarity) extracted from the real game's `game.lua`.
