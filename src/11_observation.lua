@@ -50,8 +50,10 @@ function Sim.Obs.encode(state)
     n = n + 8
 
     -- 12 hand levels (log-scaled, capped to [0, 1])
+    -- Scale = 1/ln(32) so level 31 maps to 1.0
+    local LOG_SCALE = 1.0 / math.log(32)
     for i = 1, 12 do
-        local v = math.log((state.hand_levels[i] or 1) + 1) * 0.2885390081777927
+        local v = math.log((state.hand_levels[i] or 1) + 1) * LOG_SCALE
         o[n+1] = math.min(v, 1.0)
         n = n + 1
     end

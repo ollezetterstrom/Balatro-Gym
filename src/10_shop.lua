@@ -57,6 +57,19 @@ function Sim.Shop.sell_joker(state, joker_idx)
     if not jk then return false end
     local def = Sim._JOKER_BY_ID[jk.id]
     state.dollars = state.dollars + math.floor((def.cost or 3) / 2)
+    -- Fire selling_card context for jokers (Campfire, Gift Card, etc.)
+    if state.jokers then
+        for ji = 1, #state.jokers do
+            local ojk = state.jokers[ji]
+            if ojk ~= jk then
+                local odef = Sim._JOKER_BY_ID[ojk.id]
+                if odef and odef.apply then
+                    local ctx = { selling_card = true, my_joker_index = ji }
+                    odef.apply(ctx, state, ojk)
+                end
+            end
+        end
+    end
     table.remove(state.jokers, joker_idx)
     return true
 end
@@ -77,6 +90,17 @@ function Sim.Shop.buy_booster(state)
     if not state.shop or not state.shop.booster then return false end
     if state.dollars < state.shop.booster.cost then return false end
     state.dollars = state.dollars - state.shop.booster.cost
+    -- Fire open_booster context for jokers (Hallucination, etc.)
+    if state.jokers then
+        for ji = 1, #state.jokers do
+            local jk = state.jokers[ji]
+            local def = Sim._JOKER_BY_ID[jk.id]
+            if def and def.apply then
+                local ctx = { open_booster = true, my_joker_index = ji }
+                def.apply(ctx, state, jk)
+            end
+        end
+    end
     -- Generate 3 joker cards for the pack
     local pack = {}
     for i = 1, 3 do

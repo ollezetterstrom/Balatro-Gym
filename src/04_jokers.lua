@@ -4,6 +4,14 @@ Sim.JOKER_DEFS = {}
 Sim._JOKER_BY_ID = {}
 
 function Sim._reg_joker(key, name, rarity, cost, apply_fn)
+    if Sim.JOKER_DEFS[key] then
+        local old = Sim.JOKER_DEFS[key]
+        old.apply = apply_fn
+        old.name = name
+        old.rarity = rarity
+        old.cost = cost
+        return old
+    end
     local def = { id = #Sim._JOKER_BY_ID + 1, key = key, name = name,
                   rarity = rarity, cost = cost, apply = apply_fn }
     Sim.JOKER_DEFS[key] = def
@@ -610,9 +618,7 @@ end)
 Sim._reg_joker("j_splash", "Splash", 1, 3, function(ctx, st, jk)
     -- All played cards count toward scoring (handled in evaluator)
 end)
-Sim._reg_joker("j_sixth_sense", "Sixth Sense", 2, 6, function(ctx, st, jk)
-    -- Destroy single 6 on first hand, create Spectral (complex)
-end)
+-- j_sixth_sense registered in 05_consumables.lua (needs CONS_POOL)
 Sim._reg_joker("j_seance", "Seance", 2, 6, function(ctx, st, jk)
     -- Create Spectral if hand is Straight Flush (complex)
 end)

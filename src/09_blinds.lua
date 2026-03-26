@@ -49,7 +49,7 @@ end
 function Sim.Blind.on_play(state, played_cards)
     -- Boss: The Arm — decrease played hand level by 1
     if state.boss_name == "The Arm" then
-        local ht = Sim.Eval.get_hand(played_cards)
+        local ht = Sim.Eval.get_hand(played_cards, state)
         if state.hand_levels[ht] and state.hand_levels[ht] > 1 then
             state.hand_levels[ht] = state.hand_levels[ht] - 1
         end
@@ -101,6 +101,18 @@ function Sim.Blind.setup(state, btype)
             state.blind_chips = math.floor(state.blind_chips * boss.chip_mult)
         end
         boss.setup(state)
+    end
+
+    -- Fire setting_blind context for jokers (Burglar, Marble, Cartomancer, etc.)
+    if state.jokers then
+        for ji = 1, #state.jokers do
+            local jk = state.jokers[ji]
+            local def = Sim._JOKER_BY_ID[jk.id]
+            if def and def.apply then
+                local ctx = { setting_blind = true, my_joker_index = ji }
+                def.apply(ctx, state, jk)
+            end
+        end
     end
 
     Sim.State.rebuild_deck(state)

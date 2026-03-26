@@ -30,7 +30,7 @@ local function _score_card_effects(state, c, insc, debuffed, chips, mult)
 end
 
 function Sim.Engine.calculate(state, played)
-    local hand_type, scoring, all_hands = Sim.Eval.get_hand(played)
+    local hand_type, scoring, all_hands = Sim.Eval.get_hand(played, state)
 
     local base = Sim.HAND_BASE[hand_type]
     local level = state.hand_levels[hand_type] or 1
@@ -39,6 +39,18 @@ function Sim.Engine.calculate(state, played)
 
     local is_sc = {}
     for i = 1, #scoring do is_sc[scoring[i]] = true end
+
+    -- Splash: all played cards count toward scoring
+    local has_splash = false
+    if state.jokers then
+        for _, jk in ipairs(state.jokers) do
+            local def = Sim._JOKER_BY_ID[jk.id]
+            if def and def.key == "j_splash" then has_splash = true; break end
+        end
+    end
+    if has_splash then
+        for i = 1, #played do is_sc[played[i]] = true end
+    end
 
     for i = 1, #played do
         local c = played[i]

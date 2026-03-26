@@ -107,18 +107,7 @@ class BalatroSimpleEnv(gym.Env):
         if action == DISCARD_ACT:
             if s.discards_left > 0 and len(s.hand) >= 1:
                 n = min(5, len(s.hand))
-                self._rt.execute(
-                    """
-                    local st, n = ...
-                    for i = n, 1, -1 do
-                        local c = table.remove(st.hand, i)
-                        if c then st.discard[#st.discard+1] = c end
-                    end
-                    st.discards_left = st.discards_left - 1
-                    Sim.State.draw(st)
-                    """,
-                    s, n,
-                )
+                self.sim.discard_first_n(s, n)
         elif action < NUM_PLAY:
             combo = ALL_COMBOS[action]
             if all(i < len(s.hand) for i in combo):
@@ -130,97 +119,22 @@ class BalatroSimpleEnv(gym.Env):
         return _obs(self.sim.Obs.encode(s)), r, done, False, {"ante": s.ante}
 
     def _play(self, state, combo):
-        combo_str = ",".join(str(i + 1) for i in combo)
+        combo_indices = [str(i + 1) for i in combo]  # 1-indexed for Lua
+        indices_str = ",".join(combo_indices)
         result = self._rt.execute(
-            """
-            local st, combo_str = ...
-            local indices = {}
-            for w in combo_str:gmatch("%d+") do indices[#indices+1] = tonumber(w) end
-            local played = {}
-            for _, idx in ipairs(indices) do played[#played+1] = st.hand[idx] end
-
-            local total, chips, mult, ht = Sim.Engine.calculate(st, played)
-
-            st.total_chips = st.total_chips + total
-            st.chips = st.chips + total
-            st.hands_left = st.hands_left - 1
-            st.hands_played = st.hands_played + 1
-
-            for _, c in ipairs(played) do st.discard[#st.discard+1] = c end
-
-            table.sort(indices, function(a,b) return a > b end)
-            for _, idx in ipairs(indices) do table.remove(st.hand, idx) end
-
-            Sim.State.draw(st)
-            if st.chips >= st.blind_chips then st.blind_beaten = true end
-
-            return total
-            """,
-            state, combo_str,
+            "local st, s = ... "
+            "local indices = {} "
+            "for w in s:gmatch('%d+') do indices[#indices+1] = tonumber(w) end "
+            "return Sim.play_cards_by_indices(st, indices)",
+            state, indices_str,
         )
         return max(0.01, float(np.log(max(1, result))) * 0.01 - 0.05 * state.hands_played)
 
     def _auto_shop(self, s):
-        self._rt.execute(
-            """
-            local st = ...
-            local shop = st.shop
-            if shop then
-                for si = 1, 2 do
-                    local jk = shop.jokers[si]
-                    if jk and st.dollars >= jk.cost and #st.jokers < st.joker_slots then
-                        Sim.Shop.buy_joker(st, si); break
-                    end
-                end
-                if shop.consumable and #st.consumables < st.consumable_slots then
-                    Sim.Shop.buy_consumable(st)
-                end
-            end
-            st.shop = nil
-            local bt = Sim.Blind.next_type(st)
-            if bt then Sim.Blind.setup(st, bt); st.phase = Sim.ENUMS.PHASE.SELECTING_HAND end
-            """,
-            s,
-        )
+        self.sim.auto_shop(s)
 
     def _advance(self, s):
-        self._rt.execute(
-            """
-            local st = ...
-            local E = Sim.ENUMS
-            local names = {"Small","Big","Boss"}
-            for i = 1, 3 do
-                if names[i] == st.blind_type then Sim.Blind.mark_done(st, i); break end
-            end
-            local rd = Sim.Blind.reward(st.blind_type=="Small" and 1 or st.blind_type=="Big" and 2 or 3)
-            st.dollars = st.dollars + rd + Sim.State.interest(st)
-            for _, c in ipairs(st.hand) do st.discard[#st.discard+1] = c end
-            st.hand = {}; st.selection = {}
-            local nb = Sim.Blind.next_type(st)
-            if not nb then
-                st.ante = st.ante + 1
-                if st.ante > 8 then st.phase = E.PHASE.WIN; return end
-                Sim.Blind.init_ante(st)
-                nb = Sim.Blind.next_type(st)
-                local shop = st.shop
-                if shop then
-                    for si = 1, 2 do
-                        local jk = shop.jokers[si]
-                        if jk and st.dollars >= jk.cost and #st.jokers < st.joker_slots then
-                            Sim.Shop.buy_joker(st, si); break
-                        end
-                    end
-                    if shop.consumable and #st.consumables < st.consumable_slots then
-                        Sim.Shop.buy_consumable(st)
-                    end
-                end
-                st.shop = nil
-            end
-            Sim.Blind.setup(st, nb)
-            st.phase = E.PHASE.SELECTING_HAND
-            """,
-            s,
-        )
+        self.sim.advance_simple(s)
 
     def render(self):
         if self._s:

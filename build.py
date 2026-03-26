@@ -15,7 +15,9 @@ ROOT = Path(__file__).parent
 SRC = ROOT / "src"
 MONOLITH = ROOT / "balatro_sim.lua"
 
-# Load order matters — must match the dofile chain in balatro_sim.lua
+# Load order matters — must match the dofile chain in balatro_sim.lua.
+# WARNING: If you add/remove/reorder modules in src/, update BOTH this list
+# AND the dofile() calls in balatro_sim.lua. They are not auto-synced.
 MODULES = [
     "00_header.lua",
     "01_enums.lua",

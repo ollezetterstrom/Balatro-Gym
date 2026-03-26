@@ -13,6 +13,8 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
     print("=== BALATRO SIM v2 — Self-Test ===\n")
 
     local J = Sim.JOKER_DEFS
+    local function jid(key) return J[key].id end
+    local function cid(key) return Sim.CONSUMABLE_DEFS[key].id end
 
     -- Test: Pair + Joker
     local s = Sim.State.new({ seed="T1", jokers={{id=J["j_joker"].id,edition=0,eternal=false,uid=1}} })
@@ -98,64 +100,64 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
     test("Buy consumable works", #bs2.consumables == 1)
 
     -- Test: Empress enhances cards
-    local es = Sim.State.new({ seed="EMP", consumables={{id=3, uid=1}} })
+    local es = Sim.State.new({ seed="EMP", consumables={{id=cid"c_empress", uid=1}} })
     es.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     es.selection = {1, 2}
     Sim._use_consumable(es, 1)
     test("Empress enhances to Mult", es.hand[1].enhancement == 2 and es.hand[2].enhancement == 2)
 
     -- Test: Venus levels Three of a Kind
-    local vs = Sim.State.new({ seed="VEN", consumables={{id=5, uid=1}} })
+    local vs = Sim.State.new({ seed="VEN", consumables={{id=cid"c_venus", uid=1}} })
     vs.hand = { C(2,1), C(5,2), C(9,3), C(11,4), C(14,1), C(3,2), C(7,3), C(13,4) }
     local vhl = vs.hand_levels[9]
     Sim._use_consumable(vs, 1)
     test("Venus levels Three of a Kind", vs.hand_levels[9] == vhl + 1)
 
     -- Test: Jupiter levels Flush
-    local js = Sim.State.new({ seed="JUP", consumables={{id=8, uid=1}} })
+    local js = Sim.State.new({ seed="JUP", consumables={{id=cid"c_jupiter", uid=1}} })
     js.hand = { C(2,1), C(5,2), C(9,3), C(11,4), C(14,1), C(3,2), C(7,3), C(13,4) }
     local jhl = js.hand_levels[7]
     Sim._use_consumable(js, 1)
     test("Jupiter levels Flush", js.hand_levels[7] == jhl + 1)
 
     -- Test: The Magician enhances to Lucky
-    local ms = Sim.State.new({ seed="MAG", consumables={{id=15, uid=1}} })
+    local ms = Sim.State.new({ seed="MAG", consumables={{id=cid"c_magician", uid=1}} })
     ms.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     ms.selection = {1, 2}
     Sim._use_consumable(ms, 1)
     test("Magician enhances to Lucky", ms.hand[1].enhancement == 8 and ms.hand[2].enhancement == 8)
 
     -- Test: The Hermit doubles money
-    local hermit_s = Sim.State.new({ seed="HER", consumables={{id=22, uid=1}} })
+    local hermit_s = Sim.State.new({ seed="HER", consumables={{id=cid"c_hermit", uid=1}} })
     hermit_s.dollars = 15
     hermit_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     Sim._use_consumable(hermit_s, 1)
     test("Hermit doubles money", hermit_s.dollars == 30)
 
     -- Test: The Hermit caps at +$20
-    local hermit2_s = Sim.State.new({ seed="HER2", consumables={{id=22, uid=1}} })
+    local hermit2_s = Sim.State.new({ seed="HER2", consumables={{id=cid"c_hermit", uid=1}} })
     hermit2_s.dollars = 30
     hermit2_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     Sim._use_consumable(hermit2_s, 1)
     test("Hermit caps at +$20", hermit2_s.dollars == 50)
 
     -- Test: Strength increases rank
-    local str_s = Sim.State.new({ seed="STR", consumables={{id=21, uid=1}} })
+    local str_s = Sim.State.new({ seed="STR", consumables={{id=cid"c_strength", uid=1}} })
     str_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     str_s.selection = {1, 2}
     Sim._use_consumable(str_s, 1)
     test("Strength +1 rank", str_s.hand[1].rank == 6 and str_s.hand[2].rank == 6)
 
     -- Test: The Star changes suit to Diamonds
-    local star_s = Sim.State.new({ seed="STAR", consumables={{id=30, uid=1}} })
+    local star_s = Sim.State.new({ seed="STAR", consumables={{id=cid"c_star", uid=1}} })
     star_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     star_s.selection = {1}
     Sim._use_consumable(star_s, 1)
     test("Star changes to Diamonds", star_s.hand[1].suit == 4)
 
     -- Test: Temperance gives money for jokers
-    local temp_s = Sim.State.new({ seed="TEMP", consumables={{id=27, uid=1}},
-        jokers={{id=1,edition=0,eternal=false,uid=1}} })
+    local temp_s = Sim.State.new({ seed="TEMP", consumables={{id=cid"c_temperance", uid=1}},
+        jokers={{id=jid"j_joker",edition=0,eternal=false,uid=1}} })
     temp_s.dollars = 4
     temp_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     Sim._use_consumable(temp_s, 1)
@@ -223,7 +225,7 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
     test("Lucky card scoring works", lucky_s.dollars >= l_money_before)
 
     -- Test: Supernova (+mult = times played this hand type)
-    local sn_s = Sim.State.new({ seed="SN", jokers={{id=21,edition=0,eternal=false,uid=1}} })
+    local sn_s = Sim.State.new({ seed="SN", jokers={{id=jid"j_supernova",edition=0,eternal=false,uid=1}} })
     sn_s.hand = { C(10,1), C(10,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
     sn_s.hand_type_counts[11] = 3  -- Pair played 3 times before
     local _,_,snm = Sim.Engine.calculate(sn_s, {sn_s.hand[1], sn_s.hand[2]})
@@ -231,7 +233,7 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
     test("Supernova adds played count", snm == 5)
 
     -- Test: Ride the Bus stacks
-    local rtb_s = Sim.State.new({ seed="RTB", jokers={{id=22,edition=0,eternal=false,uid=1}} })
+    local rtb_s = Sim.State.new({ seed="RTB", jokers={{id=jid"j_ride_the_bus",edition=0,eternal=false,uid=1}} })
     rtb_s.hand = { C(2,1), C(2,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
     rtb_s.ride_the_bus = 3
     local _,_,rtbm = Sim.Engine.calculate(rtb_s, {rtb_s.hand[1], rtb_s.hand[2]})
@@ -239,27 +241,27 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
     test("Ride the Bus adds stacks", rtbm == 5)
 
     -- Test: Blackboard (all Spade/Club in hand)
-    local bb_s = Sim.State.new({ seed="BB", jokers={{id=23,edition=0,eternal=false,uid=1}} })
+    local bb_s = Sim.State.new({ seed="BB", jokers={{id=jid"j_blackboard",edition=0,eternal=false,uid=1}} })
     bb_s.hand = { C(2,1), C(2,3), C(3,1), C(7,3), C(5,1), C(9,3), C(12,1), C(6,3) }
     local _,_,bbm = Sim.Engine.calculate(bb_s, {bb_s.hand[1], bb_s.hand[2]})
     -- Pair base mult 2 * Blackboard ×3 = 6
     test("Blackboard ×3 when all dark", bbm == 6)
 
     -- Test: Blackboard fails with Hearts
-    local bb2_s = Sim.State.new({ seed="BB2", jokers={{id=23,edition=0,eternal=false,uid=1}} })
+    local bb2_s = Sim.State.new({ seed="BB2", jokers={{id=jid"j_blackboard",edition=0,eternal=false,uid=1}} })
     bb2_s.hand = { C(2,1), C(2,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
     local _,_,bb2m = Sim.Engine.calculate(bb2_s, {bb2_s.hand[1], bb2_s.hand[2]})
     test("Blackboard fails with Hearts", bb2m == 2)
 
     -- Test: Ramen starts at ×2
-    local rm_s = Sim.State.new({ seed="RM", jokers={{id=24,edition=0,eternal=false,uid=1}} })
+    local rm_s = Sim.State.new({ seed="RM", jokers={{id=jid"j_ramen",edition=0,eternal=false,uid=1}} })
     rm_s.hand = { C(2,1), C(2,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
     rm_s.cards_drawn = 0
     local _,_,rmm = Sim.Engine.calculate(rm_s, {rm_s.hand[1], rm_s.hand[2]})
     test("Ramen ×2 at 0 draws", rmm == 4)  -- 2 * 2 = 4
 
     -- Test: Acrobat ×3 on last hand
-    local ac_s = Sim.State.new({ seed="AC", jokers={{id=25,edition=0,eternal=false,uid=1}} })
+    local ac_s = Sim.State.new({ seed="AC", jokers={{id=jid"j_acrobat",edition=0,eternal=false,uid=1}} })
     ac_s.hand = { C(2,1), C(2,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
     ac_s.hands_left = 0
     local _,_,acm = Sim.Engine.calculate(ac_s, {ac_s.hand[1], ac_s.hand[2]})
@@ -267,8 +269,8 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
 
     -- Test: Sock and Buskin re-triggers face card effects
     local sb_s = Sim.State.new({ seed="SB", jokers={
-        {id=26,edition=0,eternal=false,uid=1},  -- Sock and Buskin
-        {id=15,edition=0,eternal=false,uid=2},  -- Scary Face (+30 chips per face)
+        {id=jid"j_sock_and_buskin",edition=0,eternal=false,uid=1},
+        {id=jid"j_scary_face",edition=0,eternal=false,uid=2},
     }})
     sb_s.hand = { C(11,1), C(11,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
     local sb_total = Sim.Engine.calculate(sb_s, {sb_s.hand[1], sb_s.hand[2]})
@@ -277,7 +279,7 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
     test("Sock and Buskin re-triggers face", sb_total == 300)
 
     -- Test: Wild card triggers suit-based joker (Greedy = Diamonds)
-    local wild_joker_s = Sim.State.new({ seed="WJ", jokers={{id=2,edition=0,eternal=false,uid=1}} })
+    local wild_joker_s = Sim.State.new({ seed="WJ", jokers={{id=jid"j_greedy",edition=0,eternal=false,uid=1}} })
     wild_joker_s.hand = { C(2,1,3), C(2,2), C(3,3), C(7,4), C(5,1), C(9,2), C(12,3), C(6,4) }
     local _,_,wj_m = Sim.Engine.calculate(wild_joker_s, {wild_joker_s.hand[1], wild_joker_s.hand[2]})
     -- Pair base mult 2 + Greedy +3 = 5 (Wild card counts as Diamond)
@@ -302,28 +304,28 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
     test("Red seal re-triggers Steel held", rh_m == 4.5)
 
     -- Test: Talisman adds Gold seal
-    local tal_s = Sim.State.new({ seed="TAL", consumables={{id=37, uid=1}} })
+    local tal_s = Sim.State.new({ seed="TAL", consumables={{id=cid"c_talisman", uid=1}} })
     tal_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     tal_s.selection = {1}
     Sim._use_consumable(tal_s, 1)
     test("Talisman adds Gold seal", tal_s.hand[1].seal == 1)
 
     -- Test: Deja Vu adds Red seal
-    local dv_s = Sim.State.new({ seed="DV", consumables={{id=45, uid=1}} })
+    local dv_s = Sim.State.new({ seed="DV", consumables={{id=cid"c_deja_vu", uid=1}} })
     dv_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     dv_s.selection = {1}
     Sim._use_consumable(dv_s, 1)
     test("Deja Vu adds Red seal", dv_s.hand[1].seal == 2)
 
     -- Test: Trance adds Blue seal
-    local tr_s = Sim.State.new({ seed="TR", consumables={{id=47, uid=1}} })
+    local tr_s = Sim.State.new({ seed="TR", consumables={{id=cid"c_trance", uid=1}} })
     tr_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     tr_s.selection = {1}
     Sim._use_consumable(tr_s, 1)
     test("Trance adds Blue seal", tr_s.hand[1].seal == 3)
 
     -- Test: Immolate destroys cards and gives $20
-    local imm_s = Sim.State.new({ seed="IMM", consumables={{id=43, uid=1}} })
+    local imm_s = Sim.State.new({ seed="IMM", consumables={{id=cid"c_immolate", uid=1}} })
     imm_s.hand = { C(5,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2), C(6,3), C(12,4) }
     imm_s.dollars = 0
     Sim._use_consumable(imm_s, 1)
@@ -331,7 +333,7 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
     test("Immolate destroys cards", #imm_s.hand == 3)  -- 8 - 5 = 3
 
     -- Test: Cryptid copies card
-    local cry_s = Sim.State.new({ seed="CRY", consumables={{id=49, uid=1}} })
+    local cry_s = Sim.State.new({ seed="CRY", consumables={{id=cid"c_cryptid", uid=1}} })
     cry_s.hand = { C(14,1), C(5,2), C(3,3), C(7,4), C(10,1), C(2,2) }
     cry_s.selection = {1}
     local hand_before = #cry_s.hand
@@ -340,7 +342,7 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
     test("Cryptid copies are Aces", cry_s.hand[#cry_s.hand].rank == 14)
 
     -- Test: Sigil changes all suits
-    local sig_s = Sim.State.new({ seed="SIG", consumables={{id=40, uid=1}} })
+    local sig_s = Sim.State.new({ seed="SIG", consumables={{id=cid"c_sigil", uid=1}} })
     sig_s.hand = { C(2,1), C(5,2), C(9,3), C(11,4), C(14,1), C(3,2), C(7,3), C(13,4) }
     Sim._use_consumable(sig_s, 1)
     local all_same = true
@@ -361,8 +363,8 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
     local state = Sim.State.new({
         rng = rng, seed = "AGENT42",
         jokers = {
-            {id=1, edition=0, eternal=false, uid=1},  -- Joker (+4 mult)
-            {id=6, edition=0, eternal=false, uid=2},  -- The Duo (x2 on pair)
+            {id=jid"j_joker", edition=0, eternal=false, uid=1},
+            {id=jid"j_the_duo", edition=0, eternal=false, uid=2},
         },
     })
     Sim.Blind.init_ante(state)

@@ -167,11 +167,8 @@ local function _step_selecting(state, atype, value)
                                 state.chips = state.chips + fx.chip_mod
                                 total = total + fx.chip_mod
                             end
-                            if fx.mult_mod then
-                                -- After-play mult is applied as chip bonus (simplified)
-                                state.chips = state.chips + fx.mult_mod
-                                total = total + fx.mult_mod
-                            end
+                            -- Note: after_play jokers should return chip_mod, not mult_mod.
+                            -- Mult is already finalized at this point.
                         end
                     end
                 end
@@ -207,7 +204,7 @@ local function _step_selecting(state, atype, value)
             for _, idx in ipairs(sorted) do
                 disc_cards[#disc_cards+1] = state.hand[idx]
             end
-            local disc_ht = Sim.Eval.get_hand(disc_cards)
+            local disc_ht = Sim.Eval.get_hand(disc_cards, state)
 
             -- Trigger Burnt Joker (on_discard, is_first_discard) and Ramen
             local num_discarded = #sorted
@@ -361,7 +358,17 @@ local function _step_shop(state, atype, value)
         return Sim._do_reorder(state, value)
 
     elseif atype == E.ACTION.PHASE_ACTION and value == 0 then
-        -- End shop
+        -- End shop — fire ending_shop context for jokers (Perkeo, etc.)
+        if state.jokers then
+            for ji = 1, #state.jokers do
+                local jk = state.jokers[ji]
+                local def = Sim._JOKER_BY_ID[jk.id]
+                if def and def.apply then
+                    local ctx = { ending_shop = true, my_joker_index = ji }
+                    def.apply(ctx, state, jk)
+                end
+            end
+        end
         state.shop = nil
         local next_btype = Sim.Blind.next_type(state)
         if next_btype then
@@ -415,4 +422,81 @@ function Sim.Env.step(state, atype, value)
 
     -- GAME_OVER or WIN
     return Sim.Obs.encode(state), 0, true
+end
+
+--- Simple env helpers (called from Python to avoid duplicated Lua logic)
+
+--- Play cards by 1-indexed hand positions. Returns total score.
+function Sim.play_cards_by_indices(state, indices)
+    local played = {}
+    for _, idx in ipairs(indices) do
+        played[#played+1] = state.hand[idx]
+    end
+    local total, chips, mult, ht = Sim.Engine.calculate(state, played)
+    state.total_chips = state.total_chips + total
+    state.chips = state.chips + total
+    state.hands_left = state.hands_left - 1
+    state.hands_played = state.hands_played + 1
+    state.hand_type_counts[ht] = (state.hand_type_counts[ht] or 0) + 1
+    for _, c in ipairs(played) do state.discard[#state.discard+1] = c end
+    table.sort(indices, function(a, b) return a > b end)
+    for _, idx in ipairs(indices) do table.remove(state.hand, idx) end
+    Sim.State.draw(state)
+    if state.chips >= state.blind_chips then state.blind_beaten = true end
+    return total
+end
+
+--- Discard the first n cards from hand.
+function Sim.discard_first_n(state, n)
+    n = math.min(n, #state.hand)
+    for i = n, 1, -1 do
+        local c = table.remove(state.hand, i)
+        if c then state.discard[#state.discard+1] = c end
+    end
+    state.discards_left = state.discards_left - 1
+    Sim.State.draw(state)
+end
+
+--- Auto-shop: buy affordable jokers/consumables, then advance.
+function Sim.auto_shop(state)
+    local shop = state.shop
+    if shop then
+        for si = 1, 2 do
+            local jk = shop.jokers[si]
+            if jk and state.dollars >= jk.cost and #state.jokers < state.joker_slots then
+                Sim.Shop.buy_joker(state, si)
+                break
+            end
+        end
+        if shop.consumable and #state.consumables < state.consumable_slots then
+            Sim.Shop.buy_consumable(state)
+        end
+    end
+    state.shop = nil
+    local bt = Sim.Blind.next_type(state)
+    if bt then Sim.Blind.setup(state, bt); state.phase = E.PHASE.SELECTING_HAND end
+end
+
+--- Advance to next blind (simple env version, includes auto-shop on new ante).
+function Sim.advance_simple(state)
+    local names = {"Small", "Big", "Boss"}
+    for i = 1, 3 do
+        if names[i] == state.blind_type then Sim.Blind.mark_done(state, i); break end
+    end
+    local rd = Sim.Blind.reward(
+        state.blind_type == "Small" and 1 or state.blind_type == "Big" and 2 or 3)
+    state.dollars = state.dollars + rd + Sim.State.interest(state)
+    for _, c in ipairs(state.hand) do state.discard[#state.discard+1] = c end
+    state.hand = {}
+    state.selection = {}
+    local nb = Sim.Blind.next_type(state)
+    if not nb then
+        state.ante = state.ante + 1
+        if state.ante > 8 then state.phase = E.PHASE.WIN; return end
+        Sim.Blind.init_ante(state)
+        nb = Sim.Blind.next_type(state)
+        Sim.auto_shop(state)
+    end
+    Sim.Blind.setup(state, nb)
+    state.phase = E.PHASE.SELECTING_HAND
 end

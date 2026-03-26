@@ -14,6 +14,8 @@
 local Sim = dofile("balatro_sim.lua")
 local C = Sim.Card.new
 local E = Sim.ENUMS
+local J = Sim.JOKER_DEFS
+local function jid(key) return J[key].id end
 
 local passed, failed, total = 0, 0, 0
 
@@ -169,7 +171,7 @@ check("Joker (+4 mult)", t, 84)
 -- = (10 + 2 + 2) × (2 + 4 + 4) = 140
 t, c, m = score(
     {C(2,1), C(2,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)},
-    {{id=1, edition=0, eternal=false, uid=1}, {id=1, edition=0, eternal=false, uid=2}},
+    {{id=jid"j_joker", edition=0, eternal=false, uid=1}, {id=jid"j_joker", edition=0, eternal=false, uid=2}},
     {1, 2}
 )
 check("Two Jokers (+8 mult)", t, 140)
@@ -178,7 +180,7 @@ check("Two Jokers (+8 mult)", t, 140)
 -- = (10 + 2 + 2 + 50) × 2 = 128
 t, c, m = score(
     {C(2,1), C(2,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)},
-    {{id=19, edition=0, eternal=false, uid=1}},
+    {{id=jid"j_sly", edition=0, eternal=false, uid=1}},
     {1, 2}
 )
 check("Sly Joker (+50 chips)", t, 128)
@@ -187,7 +189,7 @@ check("Sly Joker (+50 chips)", t, 128)
 -- = (10 + 2 + 2) × (2 × 2) = 56
 t, c, m = score(
     {C(2,1), C(2,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)},
-    {{id=6, edition=0, eternal=false, uid=1}},
+    {{id=jid"j_the_duo", edition=0, eternal=false, uid=1}},
     {1, 2}
 )
 check("The Duo (×2 on Pair)", t, 56)
@@ -196,7 +198,7 @@ check("The Duo (×2 on Pair)", t, 56)
 -- = (30 + 7 + 7 + 7) × (3 × 3) = 459
 t, c, m = score(
     {C(7,1), C(7,2), C(7,3), C(9,4), C(3,1), C(2,2), C(10,3), C(6,4)},
-    {{id=7, edition=0, eternal=false, uid=1}},
+    {{id=jid"j_the_trio", edition=0, eternal=false, uid=1}},
     {1, 2, 3}
 )
 check("The Trio (×3 on Trips)", t, 459)
@@ -206,7 +208,7 @@ check("The Trio (×3 on Trips)", t, 459)
 -- = (10 + 2 + 2) × (2 + 6) = 112
 t, c, m = score(
     {C(2,4), C(2,4), C(5,3), C(9,3), C(3,1), C(7,2), C(10,3), C(6,1)},
-    {{id=2, edition=0, eternal=false, uid=1}},
+    {{id=jid"j_greedy", edition=0, eternal=false, uid=1}},
     {1, 2}  -- pair of 2♦
 )
 check("Greedy Joker (+3 on ♦)", t, 112)
@@ -215,7 +217,7 @@ check("Greedy Joker (+3 on ♦)", t, 112)
 -- = (10 + 2 + 2) × (2 + 8 + 8) = 252
 t, c, m = score(
     {C(2,1), C(2,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)},
-    {{id=14, edition=0, eternal=false, uid=1}},
+    {{id=jid"j_fibonacci", edition=0, eternal=false, uid=1}},
     {1, 2}
 )
 check("Fibonacci (+8 per 2)", t, 252)
@@ -224,7 +226,7 @@ check("Fibonacci (+8 per 2)", t, 252)
 -- = (10 + 10 + 10 + 30 + 30) × 2 = 180
 t, c, m = score(
     {C(13,1), C(13,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)},
-    {{id=15, edition=0, eternal=false, uid=1}},
+    {{id=jid"j_scary_face", edition=0, eternal=false, uid=1}},
     {1, 2}
 )
 check("Scary Face (+30 per face)", t, 180)
@@ -233,7 +235,7 @@ check("Scary Face (+30 per face)", t, 180)
 -- = (10 + 8 + 8) × (2 + 4 + 4) = 260
 t, c, m = score(
     {C(8,1), C(8,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)},
-    {{id=16, edition=0, eternal=false, uid=1}},
+    {{id=jid"j_even_steven", edition=0, eternal=false, uid=1}},
     {1, 2}
 )
 check("Even Steven (+4 per even)", t, 260)
@@ -242,7 +244,7 @@ check("Even Steven (+4 per even)", t, 260)
 -- = (10 + 3 + 3 + 31 + 31) × 2 = 156
 t, c, m = score(
     {C(3,1), C(3,2), C(5,3), C(9,4), C(7,1), C(10,2), C(4,3), C(8,4)},
-    {{id=17, edition=0, eternal=false, uid=1}},
+    {{id=jid"j_odd_todd", edition=0, eternal=false, uid=1}},
     {1, 2, 3, 4, 5}  -- pair of 3s + 5, 9, 7 (all odd)
 )
 check("Odd Todd (+31 per odd)", t, 156)
@@ -254,7 +256,7 @@ check("Odd Todd (+31 per odd)", t, 156)
 -- = (10 + 11 + 11 + 20 + 20) × (2 + 4 + 4) = 72 × 10 = 720
 t, c, m = score(
     {C(14,1), C(14,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)},
-    {{id=18, edition=0, eternal=false, uid=1}},
+    {{id=jid"j_scholar", edition=0, eternal=false, uid=1}},
     {1, 2}
 )
 check("Scholar (+20+4 per Ace)", t, 720)
@@ -263,7 +265,7 @@ check("Scholar (+20+4 per Ace)", t, 720)
 -- = (10 + 2 + 2) × (2 + 4) × 2 = 168
 t, c, m = score(
     {C(2,1), C(2,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)},
-    {{id=1, edition=0, eternal=false, uid=1}, {id=6, edition=0, eternal=false, uid=2}},
+    {{id=jid"j_joker", edition=0, eternal=false, uid=1}, {id=jid"j_the_duo", edition=0, eternal=false, uid=2}},
     {1, 2}
 )
 check("Joker(+4) + Duo(×2) = 168", t, 168)
@@ -273,7 +275,7 @@ check("Joker(+4) + Duo(×2) = 168", t, 168)
 -- Pair of 2s: = (10 + 2 + 2) × 12 = 168
 t, c, m = score(
     {C(2,1), C(2,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)},
-    {{id=10, edition=0, eternal=false, uid=1}, {id=1, edition=0, eternal=false, uid=2}},
+    {{id=jid"j_stencil", edition=0, eternal=false, uid=1}, {id=jid"j_joker", edition=0, eternal=false, uid=2}},
     {1, 2}
 )
 check("Joker Stencil (×4 empty)", t, 168)
@@ -281,7 +283,7 @@ check("Joker Stencil (×4 empty)", t, 168)
 -- Banner (+30 per remaining discard): Pair of 2s, 3 discards left
 -- = (10 + 2 + 2 + 90) × 2 = 208
 do
-    local state = Sim.State.new({seed="V", jokers={{id=11, edition=0, eternal=false, uid=1}}})
+    local state = Sim.State.new({seed="V", jokers={{id=jid"j_banner", edition=0, eternal=false, uid=1}}})
     state.hand = {C(2,1), C(2,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)}
     state.discards_left = 3
     local total = Sim.Engine.calculate(state, {state.hand[1], state.hand[2]})
@@ -291,7 +293,7 @@ end
 -- Mystic Summit (+15 when discards=0): Pair of 2s
 -- = (10 + 2 + 2) × (2 + 15) = 238
 do
-    local state = Sim.State.new({seed="V", jokers={{id=12, edition=0, eternal=false, uid=1}}})
+    local state = Sim.State.new({seed="V", jokers={{id=jid"j_mystic_summit", edition=0, eternal=false, uid=1}}})
     state.hand = {C(2,1), C(2,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)}
     state.discards_left = 0
     local total = Sim.Engine.calculate(state, {state.hand[1], state.hand[2]})
@@ -338,7 +340,7 @@ print("\n--- Part 6: Complex stacking ---")
 -- = 14 × 20 = 280
 t, c, m = score(
     {C(2,1,4), C(2,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)},
-    {{id=14, edition=0, eternal=false, uid=1}},
+    {{id=jid"j_fibonacci", edition=0, eternal=false, uid=1}},
     {1, 2}
 )
 check("Glass + Fibonacci (14×20)", t, 280)
@@ -347,7 +349,7 @@ check("Glass + Fibonacci (14×20)", t, 280)
 -- = (10 + 2 + 2 + 50) × (2 + 4) = 384
 t, c, m = score(
     {C(2,1), C(2,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)},
-    {{id=1, edition=1, eternal=false, uid=1}},  -- Joker with Foil
+    {{id=jid"j_joker", edition=1, eternal=false, uid=1}},  -- Joker with Foil
     {1, 2}
 )
 check("Joker Foil edition (+50)", t, 384)
@@ -356,7 +358,7 @@ check("Joker Foil edition (+50)", t, 384)
 -- = (10 + 2 + 2) × (2 + 4) × 1.5 = 126
 t, c, m = score(
     {C(2,1), C(2,2), C(5,3), C(9,4), C(3,1), C(7,2), C(10,3), C(6,4)},
-    {{id=1, edition=3, eternal=false, uid=1}},  -- Joker with Polychrome
+    {{id=jid"j_joker", edition=3, eternal=false, uid=1}},  -- Joker with Polychrome
     {1, 2}
 )
 check("Joker Polychrome edition (×1.5)", t, 126)

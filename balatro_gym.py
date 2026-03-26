@@ -15,6 +15,8 @@ Usage:
 
 from __future__ import annotations
 from pathlib import Path
+import logging
+import traceback
 
 import gymnasium as gym
 import numpy as np
@@ -165,10 +167,10 @@ class BalatroEnv(gym.Env):
             lua_obs, reward, done = self.lua_env.step(
                 self._lua_state, action_type, action_value
             )
-        except Exception as e:
-            # Return terminal state on Lua errors to avoid crashing training
+        except Exception:
+            logging.error("Lua step() error:\n%s", traceback.format_exc())
             obs = _obs_to_numpy({})
-            return obs, -100.0, True, False, {"error": str(e)}
+            return obs, -100.0, True, False, {"error": "lua_step_crash"}
 
         obs = _obs_to_numpy(lua_obs)
         truncated = False

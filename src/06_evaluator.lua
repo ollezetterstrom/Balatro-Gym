@@ -40,8 +40,8 @@ end
 local function _is_wild(card) return card.enhancement == WILD end
 local function _is_stone(card) return card.enhancement == STONE end
 
-local function _flush(hand)
-    if #hand ~= 5 then return {} end
+local function _flush(hand, required)
+    if #hand < required then return {} end
     local suit = nil
     for i = 1, #hand do
         if _is_wild(hand[i]) then
@@ -54,8 +54,8 @@ local function _flush(hand)
     return {hand}
 end
 
-local function _straight(hand)
-    if #hand ~= 5 then return {} end
+local function _straight(hand, required, can_skip)
+    if #hand < required then return {} end
     local seen = {}
     for i = 1, #hand do
         local id = _cid(hand[i])
@@ -66,29 +66,86 @@ local function _straight(hand)
     end
     local br, bc = 0, {}
     local run, cards = 0, {}
+    -- Check ace-low straight (A-2-3-4-5)
     if seen[14] and seen[2] and seen[3] and seen[4] and seen[5] then
         br = 5
         for _, r in ipairs({14,2,3,4,5}) do
             for _, c in ipairs(seen[r]) do bc[#bc+1] = c end
         end
     end
-    for r = 2, 14 do
-        if seen[r] then
-            run = run + 1
-            for _, c in ipairs(seen[r]) do cards[#cards+1] = c end
-            if run > br then br = run; bc = {} for _,c in ipairs(cards) do bc[#bc+1]=c end end
-        else run = 0; cards = {} end
+    if can_skip then
+        -- Shortcut: can skip ranks, just need `required` unique ranks in sequence
+        local ranks_present = {}
+        for r = 2, 14 do if seen[r] then ranks_present[#ranks_present+1] = r end end
+        if #ranks_present >= required then
+            for start = 1, #ranks_present - required + 1 do
+                local run_cards = {}
+                for j = start, start + required - 1 do
+                    for _, c in ipairs(seen[ranks_present[j]]) do
+                        run_cards[#run_cards+1] = c
+                    end
+                end
+                if #run_cards > #bc then
+                    bc = run_cards
+                    br = required
+                end
+            end
+        end
+        -- Also check ace-low with skipping
+        if seen[14] then
+            local low_ranks = {}
+            for r = 2, 14 do if seen[r] then low_ranks[#low_ranks+1] = r end end
+            if #low_ranks >= required then
+                for start = 1, #low_ranks - required + 1 do
+                    local run_cards = {}
+                    for j = start, start + required - 1 do
+                        for _, c in ipairs(seen[low_ranks[j]]) do
+                            run_cards[#run_cards+1] = c
+                        end
+                    end
+                    if #run_cards > #bc then
+                        bc = run_cards
+                        br = required
+                    end
+                end
+            end
+        end
+    else
+        -- Normal straight detection (consecutive ranks)
+        for r = 2, 14 do
+            if seen[r] then
+                run = run + 1
+                for _, c in ipairs(seen[r]) do cards[#cards+1] = c end
+                if run > br then br = run; bc = {} for _,c in ipairs(cards) do bc[#bc+1]=c end end
+            else run = 0; cards = {} end
+        end
     end
-    return br >= 5 and {bc} or {}
+    return br >= required and {bc} or {}
 end
 
 --- Returns: best_type, scoring_cards, all_hands_table
-function Sim.Eval.get_hand(cards)
+--- state is optional — if provided, checks for Four Fingers / Shortcut / Splash jokers
+function Sim.Eval.get_hand(cards, state)
     if not cards or #cards == 0 then
         return E.HAND_TYPE.HIGH_CARD, {}, {}
     end
+
+    -- Check for evaluator-modifying jokers
+    local four_fingers, shortcut, splash = false, false, false
+    if state and state.jokers then
+        for _, jk in ipairs(state.jokers) do
+            local def = Sim._JOKER_BY_ID[jk.id]
+            if def then
+                if def.key == "j_four_fingers" then four_fingers = true
+                elseif def.key == "j_shortcut" then shortcut = true
+                elseif def.key == "j_splash" then splash = true end
+            end
+        end
+    end
+    local required = four_fingers and 4 or 5
+
     local _5, _4, _3, _2 = _x_same(5,cards), _x_same(4,cards), _x_same(3,cards), _x_same(2,cards)
-    local _fl, _st, _hi = _flush(cards), _straight(cards), _highest(cards)
+    local _fl, _st, _hi = _flush(cards, required), _straight(cards, required, shortcut), _highest(cards)
     local HT = E.HAND_TYPE
     local best, best_sc, all = HT.HIGH_CARD, _hi, {}
 
