@@ -71,7 +71,20 @@ G.POOLS = {}
 G.E_MANAGER = { add_event = function() end }
 
 -- Load misc_functions.lua (has evaluate_poker_hand, get_X_same, etc.)
-dofile("functions/misc_functions.lua")
+-- Requires local copy of Balatro game functions — not included in this repo.
+-- Usage: lua cross_validate.lua [num_tests] [path/to/Balatro/functions]
+local game_funcs_path = arg[1] or "functions"
+local misc_path = game_funcs_path .. "/misc_functions.lua"
+local f = io.open(misc_path, "r")
+if not f then
+    print("ERROR: Cannot find " .. misc_path)
+    print("cross_validate.lua requires the real Balatro game's functions/misc_functions.lua")
+    print("Usage: lua cross_validate.lua [num_tests] /path/to/Balatro/functions")
+    print("Point it at your local game install directory.")
+    os.exit(1)
+end
+f:close()
+dofile(misc_path)
 
 -- Set up minimal game state (needed for calculate_joker)
 local function setup_g_game()
