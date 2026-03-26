@@ -7,7 +7,7 @@ A working headless Balatro simulation engine with a Gymnasium wrapper, ready for
 **What's done:**
 - [x] Core scoring engine (chips × mult, all 12 hand types)
 - [x] Deterministic RNG (LCG, same seed = same game everywhere)
-- [x] 28 jokers with full scoring integration (Blueprint copy, Hiker permabuff, Sock and Buskin re-trigger, etc.)
+- [x] 147 jokers registered with correct data from real game; ~50 with full scoring behavior (Blueprint copy, Hiker permabuff, Sock and Buskin re-trigger, etc.)
 - [x] 8 boss blinds with debuff/setup effects (The Wall, The Arm, The Water, etc.)
 - [x] Boss blind rotation (don't repeat until all seen)
 - [x] 49 consumables (12 planets, 21 tarots, 16 spectrals)
