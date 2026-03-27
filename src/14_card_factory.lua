@@ -45,13 +45,72 @@ for suit = 1, 4 do
 end
 
 --- Roll rarity for a joker. Returns 1-4.
---- Uses pseudorandom seeded by ante (matches real game's rarity roll).
+--- Real game: pseudorandom('rarity'..ante..append) → roll
+--- >0.95 = Rare(3), >0.70 = Uncommon(2), else Common(1)
+--- Legendary(4) only from The Soul, never from normal roll.
 function Sim.CardFactory.roll_rarity(state, rng)
     local roll = Sim.RNG.next(rng)
     if roll > 0.95 then return 3     -- Rare: 5%
     elseif roll > 0.70 then return 2 -- Uncommon: 25%
     else return 1                    -- Common: 70%
     end
+end
+
+--- Roll edition for a card. Returns edition number (0=none, 1=foil, 2=holo, 3=poly, 4=neg).
+--- Real game poll_edition (common_events.lua:2055-2080):
+---   p = pseudorandom(key)
+---   if p > 1 - 0.003*_mod and not _no_neg → negative
+---   elseif p > 1 - 0.006*edition_rate*_mod → polychrome
+---   elseif p > 1 - 0.02*edition_rate*_mod → holo
+---   elseif p > 1 - 0.04*edition_rate*_mod → foil
+--- MARGINAL probabilities: neg 0.3%, poly 0.3%, holo 1.4%, foil 2.0%
+function Sim.CardFactory.roll_edition(state, rng, _mod, _no_neg, _guaranteed)
+    _mod = _mod or 1.0
+    local p = Sim.RNG.next(rng)
+    local er = state._edition_rate or 1.0
+    if _guaranteed then
+        if p > 1 - 0.003*25 and not _no_neg then return 4 end
+        if p > 1 - 0.006*25 then return 3 end
+        if p > 1 - 0.02*25 then return 2 end
+        if p > 1 - 0.04*25 then return 1 end
+    else
+        if p > 1 - 0.003*_mod and not _no_neg then return 4 end
+        if p > 1 - 0.006*er*_mod then return 3 end
+        if p > 1 - 0.02*er*_mod then return 2 end
+        if p > 1 - 0.04*er*_mod then return 1 end
+    end
+    return 0
+end
+
+--- Roll stickers for a joker (eternal/perishable/rental).
+--- Real game create_card (common_events.lua:2133-2147):
+---   epp = pseudorandom(poll_key..ante)
+---   if enable_eternals and epp > 0.7 → eternal
+---   elseif enable_perishables and 0.4 < epp <= 0.7 → perishable
+---   rental check: pseudorandom(key..ante) > 0.7 → rental
+--- All independent probabilities.
+function Sim.CardFactory.roll_stickers(state, rng)
+    local eternal = false
+    local perishable = false
+    local rental = false
+
+    if state.modifiers and state.modifiers.all_eternal then
+        eternal = true
+    end
+
+    if state.modifiers then
+        local epp = Sim.RNG.next(rng)
+        if state.modifiers.enable_eternals and epp > 0.7 then
+            eternal = true
+        elseif state.modifiers.enable_perishables and epp > 0.4 and epp <= 0.7 then
+            perishable = true
+        end
+        if state.modifiers.enable_rentals and Sim.RNG.next(rng) > 0.7 then
+            rental = true
+        end
+    end
+
+    return eternal, perishable, rental
 end
 
 --- Get available joker IDs for a given rarity, excluding owned jokers.
@@ -108,35 +167,47 @@ function Sim.CardFactory.get_consumable_pool(state, ctype, showman)
 end
 
 --- Create a card of the given type.
+--- Exact port of create_card (common_events.lua:2082-2154)
 ---
 --- card_type: "Joker", "Tarot", "Planet", "Spectral", "Playing Card"
 --- state: game state
 --- rng: RNG instance
---- rarity: (optional) for Joker type, force rarity 1-4. nil = roll.
---- force_key: (optional) force a specific key instead of random
---- showman: (optional) if true, don't exclude owned cards from pool
+--- opts: optional table { rarity, force_key, showman, soulable, area, key_append }
 ---
 --- Returns: card table or nil if pool is empty
-function Sim.CardFactory.create(card_type, state, rng, rarity, force_key, showman)
+function Sim.CardFactory.create(card_type, state, rng, opts)
+    opts = opts or {}
+    local rarity = opts.rarity
+    local force_key = opts.force_key
+    local showman = opts.showman
+    local soulable = opts.soulable  -- default true for consumables
+    local area = opts.area or ""
+    local key_append = opts.key_append or ""
+
+    -- Default soulable to true for Tarot/Planet/Spectral
+    if soulable == nil and (card_type == "Tarot" or card_type == "Planet" or card_type == "Spectral") then
+        soulable = true
+    end
+    if soulable == nil then soulable = false end
+
     if card_type == "Joker" then
         -- Roll rarity if not specified
         local r = rarity or Sim.CardFactory.roll_rarity(state, rng)
-        if r == 4 then r = 4 end  -- Legendary only via Soul
+        if r == 4 then r = 4 end
 
-        -- Check for Soul card (0.3% when creating Tarot/Spectral/Planet)
-        -- Legendary jokers only come from Soul card, not normal creation
+        -- Legendary only via Soul card, not normal creation
         if r == 4 then
             local leg_pool = Sim.JOKER_RARITY_POOLS[4]
             if not leg_pool or #leg_pool == 0 then return nil end
             local jid = Sim.RNG.pick(rng, leg_pool)
+            state._uid_n = (state._uid_n or 0) + 1
             return { id = jid, edition = 0, eternal = false, perishable = false,
-                     rental = false, uid = (state._uid_n or 0) + 1, _new = true }
+                     rental = false, uid = state._uid_n, _new = true }
         end
 
         -- Get pool for this rarity
         local pool = Sim.CardFactory.get_joker_pool(state, r, showman)
         if #pool == 0 then
-            -- Pool exhausted, try fallback to any rarity
             for fallback_r = 1, 3 do
                 pool = Sim.CardFactory.get_joker_pool(state, fallback_r, showman)
                 if #pool > 0 then break end
@@ -152,31 +223,30 @@ function Sim.CardFactory.create(card_type, state, rng, rarity, force_key, showma
             jid = Sim.RNG.pick(rng, pool)
         end
 
-        -- Roll edition (from real game common_events.lua)
-        local edition = 0
-        local edition_roll = Sim.RNG.next(rng)
-        local edition_rate = state._edition_rate or 1.0
-        if edition_roll < 0.003 * edition_rate then
-            edition = 4  -- Negative
-        elseif edition_roll < 0.006 * edition_rate + 0.003 * edition_rate then
-            edition = 3  -- Polychrome
-        elseif edition_roll < 0.02 * edition_rate + 0.009 * edition_rate then
-            edition = 2  -- Holographic
-        elseif edition_roll < 0.04 * edition_rate + 0.029 * edition_rate then
-            edition = 1  -- Foil
+        -- Roll edition (EXACT: common_events.lua poll_edition)
+        local edition = Sim.CardFactory.roll_edition(state, rng)
+
+        -- Roll stickers (EXACT: common_events.lua:2133-2147)
+        -- Only for shop_jokers and pack_cards areas
+        local eternal, perishable, rental = false, false, false
+        if area == "shop_jokers" or area == "pack_cards" then
+            eternal, perishable, rental = Sim.CardFactory.roll_stickers(state, rng)
+        end
+        -- Override: all_eternal modifier
+        if state.modifiers and state.modifiers.all_eternal then
+            eternal = true
         end
 
         state._uid_n = (state._uid_n or 0) + 1
-        return { id = jid, edition = edition, eternal = false, perishable = false,
-                 rental = false, uid = state._uid_n, _new = true }
+        return { id = jid, edition = edition, eternal = eternal, perishable = perishable,
+                 rental = rental, uid = state._uid_n, _new = true }
 
     elseif card_type == "Tarot" or card_type == "Planet" or card_type == "Spectral" then
-        -- Check for Soul / Black Hole chance (0.3%)
-        if card_type ~= "Planet" then
-            -- 0.3% chance for The Soul when creating Tarot or Spectral
+        -- Soul / Black Hole check (EXACT: common_events.lua:2088-2101)
+        -- Soul: 0.3% when creating Tarot or Spectral (not if already used and no Showman)
+        if soulable and card_type ~= "Planet" then
             local soul_roll = Sim.RNG.next(rng)
-            if soul_roll < 0.003 then
-                -- Create The Soul consumable (if exists)
+            if soul_roll > 0.997 then  -- NOTE: > 0.997, not < 0.003
                 local soul_def = Sim.CONSUMABLE_DEFS["c_soul"]
                 if soul_def then
                     state._uid_n = (state._uid_n or 0) + 1
@@ -184,10 +254,10 @@ function Sim.CardFactory.create(card_type, state, rng, rarity, force_key, showma
                 end
             end
         end
-        if card_type ~= "Tarot" then
-            -- 0.3% chance for Black Hole when creating Planet or Spectral
+        -- Black Hole: 0.3% when creating Planet or Spectral
+        if soulable and card_type ~= "Tarot" then
             local bh_roll = Sim.RNG.next(rng)
-            if bh_roll < 0.003 then
+            if bh_roll > 0.997 then
                 local bh_def = Sim.CONSUMABLE_DEFS["c_black_hole"]
                 if bh_def then
                     state._uid_n = (state._uid_n or 0) + 1
@@ -212,7 +282,6 @@ function Sim.CardFactory.create(card_type, state, rng, rarity, force_key, showma
         return { id = cid, uid = state._uid_n, _new = true }
 
     elseif card_type == "Playing Card" then
-        -- Random playing card
         local roll = Sim.RNG.pick(rng, Sim.PLAYING_CARD_POOL)
         local rank = roll.rank
         local suit = roll.suit

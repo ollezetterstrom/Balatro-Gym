@@ -29,6 +29,26 @@ function Sim.State.new(opts)
         rng=rng, _joker_n=0, _cons_n=0,
         ride_the_bus=0, cards_drawn=0,
         round_dollars=0,
+
+        -- Shop/economy state (from real game game.lua:1890-1985)
+        _edition_rate = 1,
+        _joker_rate = 20,
+        _tarot_rate = 4,
+        _planet_rate = 4,
+        _spectral_rate = 0,
+        _playing_card_rate = 0,
+        _discount_percent = 0,
+        _interest_cap = 25,        -- Default 25 (interest_cap/5 = 5 units)
+        _interest_amount = 1,
+        _inflation = 0,
+        _base_reroll_cost = 1,     -- round_resets.reroll_cost = 1
+        _reroll_cost_increase = 0,
+        _free_rerolls = 0,
+        _temp_reroll_cost = nil,
+        _rerolls_this_round = 0,
+        _jokers_purchased = 0,
+        _first_shop_buffoon = false,
+        modifiers = {},
     }
 end
 
@@ -59,8 +79,10 @@ function Sim.State.rebuild_deck(state)
 end
 
 function Sim.State.interest(state)
-    local cap = state._interest_cap or 5
-    return math.min(math.floor(state.dollars / 5), cap)
+    local cap = state._interest_cap or 25
+    local amount = state._interest_amount or 1
+    if state.dollars < 5 then return 0 end
+    return amount * math.min(math.floor(state.dollars / 5), cap / 5)
 end
 
 function Sim.State.level_up(state, ht, amt)
