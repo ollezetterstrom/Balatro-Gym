@@ -2148,7 +2148,7 @@ Sim.Voucher.reg("v_clearance_sale", "Clearance Sale", 1, nil, function(state)
 end)
 
 Sim.Voucher.reg("v_hone", "Hone", 1, nil, function(state)
-    state._edition_rate = 2.0
+    state._edition_rate = 2  -- Real: G.GAME.edition_rate = extra (2)
 end)
 
 Sim.Voucher.reg("v_reroll_surplus", "Reroll Surplus", 1, nil, function(state)
@@ -2172,11 +2172,11 @@ Sim.Voucher.reg("v_wasteful", "Wasteful", 1, nil, function(state)
 end)
 
 Sim.Voucher.reg("v_tarot_merchant", "Tarot Merchant", 1, nil, function(state)
-    state._tarot_rate_mult = 2
+    state._tarot_rate = 9.6  -- 4 * (9.6/4) per real game
 end)
 
 Sim.Voucher.reg("v_planet_merchant", "Planet Merchant", 1, nil, function(state)
-    state._planet_rate_mult = 2
+    state._planet_rate = 9.6
 end)
 
 Sim.Voucher.reg("v_seed_money", "Seed Money", 1, nil, function(state)
@@ -2193,6 +2193,7 @@ end)
 
 Sim.Voucher.reg("v_hieroglyph", "Hieroglyph", 1, nil, function(state)
     state.ante = math.max(1, state.ante - 1)
+    state.hands = (state.hands or 4) - 1  -- Secondary: -1 hand per round
 end)
 
 Sim.Voucher.reg("v_directors_cut", "Director's Cut", 1, nil, function(state)
@@ -2214,7 +2215,7 @@ Sim.Voucher.reg("v_liquidation", "Liquidation", 2, "v_clearance_sale", function(
 end)
 
 Sim.Voucher.reg("v_glow_up", "Glow Up", 2, "v_hone", function(state)
-    state._edition_rate = 4.0
+    state._edition_rate = 4  -- Real: G.GAME.edition_rate = extra (4)
 end)
 
 Sim.Voucher.reg("v_reroll_glut", "Reroll Glut", 2, "v_reroll_surplus", function(state)
@@ -2239,11 +2240,11 @@ Sim.Voucher.reg("v_recyclomancy", "Recyclomancy", 2, "v_wasteful", function(stat
 end)
 
 Sim.Voucher.reg("v_tarot_tycoon", "Tarot Tycoon", 2, "v_tarot_merchant", function(state)
-    state._tarot_rate_mult = 4
+    state._tarot_rate = 32  -- 4 * (32/4) per real game
 end)
 
 Sim.Voucher.reg("v_planet_tycoon", "Planet Tycoon", 2, "v_planet_merchant", function(state)
-    state._planet_rate_mult = 4
+    state._planet_rate = 32
 end)
 
 Sim.Voucher.reg("v_money_tree", "Money Tree", 2, "v_seed_money", function(state)
@@ -2260,6 +2261,7 @@ end)
 
 Sim.Voucher.reg("v_petroglyph", "Petroglyph", 2, "v_hieroglyph", function(state)
     state.ante = math.max(1, state.ante - 1)
+    state.discards = (state.discards or 3) - 1  -- Secondary: -1 discard per round
 end)
 
 Sim.Voucher.reg("v_retcon", "Retcon", 2, "v_directors_cut", function(state)
@@ -2731,6 +2733,11 @@ function Sim.Engine.calculate(state, played)
         end
     end
 
+    -- Boss blind modify_hand hook (The Flint halves chips and mult)
+    local mod_chips, mod_mult = Sim.Blind.modify_hand(state, chips, mult)
+    if mod_chips then chips = mod_chips end
+    if mod_mult then mult = mod_mult end
+
     return math.floor(chips * mult), chips, mult, hand_type, scoring, all_hands
 end
 
@@ -2771,7 +2778,12 @@ function Sim.State.draw(state)
     if #state.hand >= state.hand_limit then return state end
     local n = math.min(state.hand_limit - #state.hand, #state.deck)
     for i = 1, n do
-        state.hand[#state.hand+1] = table.remove(state.deck, 1)
+        local card = table.remove(state.deck, 1)
+        -- Boss blind: stay_flipped check (The Wheel, House, Mark, Fish)
+        if card and Sim.Blind.stay_flipped(state, card) then
+            card._flipped = true
+        end
+        state.hand[#state.hand+1] = card
         state.cards_drawn = state.cards_drawn + 1
     end
     return state
@@ -2830,36 +2842,39 @@ local BLIND_DATA = {
 local SUIT = Sim.ENUMS.SUIT
 
 Sim.BOSS_BLINDS = {
-    -- Regular bosses (25)
+    -- Regular bosses (23) — behaviors match blind.lua exactly
     { name = "The Club",       chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.CLUBS end },
     { name = "The Goad",       chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.SPADES end },
     { name = "The Head",       chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.HEARTS end },
     { name = "The Window",     chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.DIAMONDS end },
-    { name = "The Psychic",    chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_must_play_5 = true end },
+    { name = "The Psychic",    chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_h_size_ge = 5 end },
     { name = "The Hook",       chip_mult = 1.0, min_ante = 1, setup = function(st) end },
     { name = "The Manacle",    chip_mult = 1.0, min_ante = 1, setup = function(st) st.hand_limit = st.hand_limit - 1 end },
-    { name = "The Water",      chip_mult = 1.0, min_ante = 2, setup = function(st) st.discards_left = 0 end },
+    { name = "The Water",      chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_discards_removed = st.discards_left; st.discards_left = 0 end },
     { name = "The Wall",       chip_mult = 2.0, min_ante = 2, setup = function(st) end },
-    { name = "The House",      chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_flip_first = true end },
+    { name = "The House",      chip_mult = 1.0, min_ante = 2, setup = function(st) end },
     { name = "The Arm",        chip_mult = 1.0, min_ante = 2, setup = function(st) end },
-    { name = "The Wheel",      chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_flip_chance = 1/7 end },
-    { name = "The Fish",       chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_flip_after_play = true end },
-    { name = "The Mouth",      chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_one_hand_type = true end },
-    { name = "The Mark",       chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_flip_faces = true end },
+    { name = "The Wheel",      chip_mult = 1.0, min_ante = 2, setup = function(st) end },
+    { name = "The Fish",       chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_fish_prepped = false end },
+    { name = "The Mouth",      chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_only_hand = false end },
+    { name = "The Mark",       chip_mult = 1.0, min_ante = 2, setup = function(st) end },
     { name = "The Tooth",      chip_mult = 1.0, min_ante = 3, setup = function(st) end },
-    { name = "The Eye",        chip_mult = 1.0, min_ante = 3, setup = function(st) st._boss_no_repeat = true end },
+    { name = "The Eye",        chip_mult = 1.0, min_ante = 3, setup = function(st) st._boss_hands_played = {} end },
     { name = "The Plant",      chip_mult = 1.0, min_ante = 4, setup = function(st) st._boss_debuff_faces = true end },
     { name = "The Needle",     chip_mult = 0.5, min_ante = 2, setup = function(st) st.hands_left = 1 end },
-    { name = "The Pillar",     chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_played = true end },
-    { name = "The Serpent",    chip_mult = 1.0, min_ante = 5, setup = function(st) st._boss_serpent = true end },
-    { name = "The Ox",         chip_mult = 1.0, min_ante = 6, setup = function(st) st._boss_ox = true end },
-    { name = "The Flint",      chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_halve = true end },
+    { name = "The Pillar",     chip_mult = 1.0, min_ante = 1, setup = function(st) end },
+    { name = "The Serpent",    chip_mult = 1.0, min_ante = 5, setup = function(st) end },
+    { name = "The Ox",         chip_mult = 1.0, min_ante = 6, setup = function(st) end },
+    { name = "The Flint",      chip_mult = 1.0, min_ante = 2, setup = function(st) end },
     -- Showdown bosses (ante 8 only, 5)
-    { name = "Cerulean Bell",  chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) st._boss_force_select = true end },
+    { name = "Cerulean Bell",  chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) end },
     { name = "Verdant Leaf",   chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) st._boss_debuff_all = true end },
     { name = "Violet Vessel",  chip_mult = 3.0, min_ante = 8, showdown = true, setup = function(st) end },
-    { name = "Amber Acorn",    chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) st._boss_shuffle_jokers = true end },
-    { name = "Crimson Heart",  chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) st._boss_debuff_random_joker = true end },
+    { name = "Amber Acorn",    chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st)
+        -- Shuffle jokers (from real game set_blind)
+        Sim.RNG.shuffle(st.rng, st.jokers)
+    end },
+    { name = "Crimson Heart",  chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) end },
 }
 
 function Sim.Blind.pick_boss(state, ante)
@@ -2902,80 +2917,126 @@ function Sim.Blind.pick_boss(state, ante)
 end
 
 function Sim.Blind.is_card_debuffed(state, card)
-    -- Suit debuffs (Club, Goad/Spade, Head/Heart, Window/Diamond)
+    if not state.boss_name then return false end
+    -- Generic suit debuff (Club, Goad/Spade, Head/Heart, Window/Diamond)
     if state._boss_debuff_suit and card.suit == state._boss_debuff_suit then
         return true
     end
-    -- Face card debuff (The Plant)
+    -- Face card debuff (The Plant) — uses is_face check (rank >= 11)
     if state._boss_debuff_faces and card.rank >= 11 and card.rank <= 13 then
         return true
     end
-    -- Verdent Leaf: debuff ALL cards until a joker is sold
-    if state._boss_debuff_all then
+    -- The Pillar: debuff cards played this ante
+    if state.boss_name == "The Pillar" and card._played_this_ante then
         return true
     end
-    -- Cards played this ante debuff (The Pillar)
-    if state._boss_debuff_played and card._played_this_ante then
+    -- Verdant Leaf: debuff ALL non-joker cards
+    if state._boss_debuff_all then
         return true
     end
     return false
 end
 
+--- Check if a card should stay face-down (The Wheel, The House, The Mark, The Fish).
+--- Called when drawing cards. Returns true to keep card flipped.
+function Sim.Blind.stay_flipped(state, card)
+    if not state.boss_name then return false end
+    -- The House: first hand stays face down (hands_played==0 AND discards_used==0)
+    if state.boss_name == "The House" and state.hands_played == 0 and state._discards_used == 0 then
+        return true
+    end
+    -- The Wheel: 1/7 chance per card
+    if state.boss_name == "The Wheel" then
+        return Sim.RNG.next(state.rng) < (1/7)
+    end
+    -- The Mark: face cards stay face down
+    if state.boss_name == "The Mark" and card.rank >= 11 and card.rank <= 13 then
+        return true
+    end
+    -- The Fish: cards stay face down after first play
+    if state.boss_name == "The Fish" and state._boss_fish_prepped then
+        return true
+    end
+    return false
+end
+
+--- Modify hand scoring (The Flint halves both chips and mult).
+--- Returns modified_chips, modified_mult, or nil to not modify.
+function Sim.Blind.modify_hand(state, chips, mult)
+    if state.boss_name == "The Flint" then
+        return math.max(math.floor(chips * 0.5 + 0.5), 0),
+               math.max(math.floor(mult * 0.5 + 0.5), 1)
+    end
+    return chips, mult
+end
+
+--- Check if hand is invalid due to boss debuff (The Psychic, The Eye, The Mouth).
+--- Returns true if the hand should be debuffed/invalidated.
+function Sim.Blind.debuff_hand(state, hand_type, hand_name, played_cards)
+    if not state.boss_name then return false end
+
+    -- The Psychic: must play 5 cards
+    if state.boss_name == "The Psychic" and #played_cards < 5 then
+        return true
+    end
+
+    -- The Eye: can't play same hand type twice
+    if state.boss_name == "The Eye" then
+        if state._boss_hands_played[hand_type] then
+            return true
+        end
+        state._boss_hands_played[hand_type] = true
+    end
+
+    -- The Mouth: can only play one hand type
+    if state.boss_name == "The Mouth" then
+        if state._boss_only_hand and state._boss_only_hand ~= hand_type then
+            return true
+        end
+        if not state._boss_only_hand then
+            state._boss_only_hand = hand_type
+        end
+    end
+
+    return false
+end
+
 function Sim.Blind.on_play(state, played_cards)
-    -- Boss: The Arm — decrease played hand level by 1
+    if not state.boss_name then return end
+
+    -- The Arm: decrease played hand level by 1 (if level > 1)
     if state.boss_name == "The Arm" then
         local ht = Sim.Eval.get_hand(played_cards, state)
         if state.hand_levels[ht] and state.hand_levels[ht] > 1 then
             state.hand_levels[ht] = state.hand_levels[ht] - 1
         end
     end
-    -- Boss: The Tooth — -$1 per card played
+
+    -- The Tooth: -$1 per card played
     if state.boss_name == "The Tooth" then
         state.dollars = math.max(0, state.dollars - #played_cards)
     end
-    -- Boss: The Ox — if play most played hand type, set money to 0
-    if state.boss_name == "The Ox" and state._boss_ox then
+
+    -- The Ox: if play most played hand, set money to 0
+    if state.boss_name == "The Ox" then
         local ht = Sim.Eval.get_hand(played_cards, state)
-        local hand_name = Sim.ENUMS.HAND_NAME[ht]
-        if hand_name then
-            local most_played = state._most_played_hand
-            if most_played and hand_name == most_played then
-                state.dollars = 0
-            end
+        local hand_names = {"High Card","Pair","Two Pair","Three of a Kind","Straight",
+            "Flush","Full House","Four of a Kind","Straight Flush","Five of a Kind",
+            "Flush House","Flush Five"}
+        local hand_name = hand_names[ht]
+        if hand_name and hand_name == state._most_played_hand then
+            state.dollars = 0
         end
     end
-    -- Boss: The Psychic — must play exactly 5 cards
-    if state.boss_name == "The Psychic" and #played_cards ~= 5 then
-        -- Hand is invalidated (debuffed)
-        state._boss_invalid_hand = true
-    end
-    -- Boss: The Eye — can't repeat hand type
-    if state.boss_name == "The Eye" and state._boss_no_repeat then
-        local ht = Sim.Eval.get_hand(played_cards, state)
-        state._played_hand_types = state._played_hand_types or {}
-        if state._played_hand_types[ht] then
-            state._boss_invalid_hand = true
-        end
-        state._played_hand_types[ht] = true
-    end
-    -- Boss: The Mouth — can only play one hand type
-    if state.boss_name == "The Mouth" and state._boss_one_hand_type then
-        local ht = Sim.Eval.get_hand(played_cards, state)
-        if state._mouth_allowed_type and ht ~= state._mouth_allowed_type then
-            state._boss_invalid_hand = true
-        elseif not state._mouth_allowed_type then
-            state._mouth_allowed_type = ht
-        end
-    end
-    -- Boss: The Flint — halves both chips and mult
-    if state._boss_halve then
-        state._boss_halve_applied = true
-    end
+
     -- Track played cards for The Pillar
-    if state._boss_debuff_played then
-        for _, c in ipairs(played_cards) do
-            c._played_this_ante = true
-        end
+    for _, c in ipairs(played_cards) do
+        c._played_this_ante = true
+    end
+
+    -- The Fish: set prepped flag after first play
+    if state.boss_name == "The Fish" then
+        state._boss_fish_prepped = true
     end
 end
 
@@ -3073,27 +3134,19 @@ end
 Sim.Shop = {}
 
 --- Calculate card cost with discounts.
+--- Real formula: math.max(1, math.floor((base_cost + 0.5) * (100 - discount) / 100))
 local function apply_discount(base_cost, state)
     local discount = state._discount or 0
-    if discount > 0 then
-        return math.max(0, math.floor(base_cost * (100 - discount) / 100 + 0.5))
-    end
-    return base_cost
+    return math.max(1, math.floor((base_cost + 0.5) * (100 - discount) / 100))
 end
 
 --- Select a card type using weighted random (matches real game).
 --- Returns: "Joker", "Tarot", "Planet", or "Spectral"
 local function pick_card_type(state)
     local joker_rate = 20
-    local tarot_rate = 4
-    local planet_rate = 4
+    local tarot_rate = state._tarot_rate or 4    -- 9.6 with Tarot Merchant, 32 with Tycoon
+    local planet_rate = state._planet_rate or 4  -- 9.6 with Planet Merchant, 32 with Tycoon
     local spectral_rate = 0
-
-    -- Voucher modifiers
-    if Sim.CardFactory.has_voucher(state, "v_tarot_merchant") then tarot_rate = 8 end
-    if Sim.CardFactory.has_voucher(state, "v_tarot_tycoon") then tarot_rate = 16 end
-    if Sim.CardFactory.has_voucher(state, "v_planet_merchant") then planet_rate = 8 end
-    if Sim.CardFactory.has_voucher(state, "v_planet_tycoon") then planet_rate = 16 end
 
     local total = joker_rate + tarot_rate + planet_rate + spectral_rate
     local roll = Sim.RNG.next(state.rng) * total

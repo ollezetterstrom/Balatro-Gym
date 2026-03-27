@@ -29,7 +29,7 @@ Sim.Voucher.reg("v_clearance_sale", "Clearance Sale", 1, nil, function(state)
 end)
 
 Sim.Voucher.reg("v_hone", "Hone", 1, nil, function(state)
-    state._edition_rate = 2.0
+    state._edition_rate = 2  -- Real: G.GAME.edition_rate = extra (2)
 end)
 
 Sim.Voucher.reg("v_reroll_surplus", "Reroll Surplus", 1, nil, function(state)
@@ -53,11 +53,11 @@ Sim.Voucher.reg("v_wasteful", "Wasteful", 1, nil, function(state)
 end)
 
 Sim.Voucher.reg("v_tarot_merchant", "Tarot Merchant", 1, nil, function(state)
-    state._tarot_rate_mult = 2
+    state._tarot_rate = 9.6  -- 4 * (9.6/4) per real game
 end)
 
 Sim.Voucher.reg("v_planet_merchant", "Planet Merchant", 1, nil, function(state)
-    state._planet_rate_mult = 2
+    state._planet_rate = 9.6
 end)
 
 Sim.Voucher.reg("v_seed_money", "Seed Money", 1, nil, function(state)
@@ -74,6 +74,7 @@ end)
 
 Sim.Voucher.reg("v_hieroglyph", "Hieroglyph", 1, nil, function(state)
     state.ante = math.max(1, state.ante - 1)
+    state.hands = (state.hands or 4) - 1  -- Secondary: -1 hand per round
 end)
 
 Sim.Voucher.reg("v_directors_cut", "Director's Cut", 1, nil, function(state)
@@ -95,7 +96,7 @@ Sim.Voucher.reg("v_liquidation", "Liquidation", 2, "v_clearance_sale", function(
 end)
 
 Sim.Voucher.reg("v_glow_up", "Glow Up", 2, "v_hone", function(state)
-    state._edition_rate = 4.0
+    state._edition_rate = 4  -- Real: G.GAME.edition_rate = extra (4)
 end)
 
 Sim.Voucher.reg("v_reroll_glut", "Reroll Glut", 2, "v_reroll_surplus", function(state)
@@ -120,11 +121,11 @@ Sim.Voucher.reg("v_recyclomancy", "Recyclomancy", 2, "v_wasteful", function(stat
 end)
 
 Sim.Voucher.reg("v_tarot_tycoon", "Tarot Tycoon", 2, "v_tarot_merchant", function(state)
-    state._tarot_rate_mult = 4
+    state._tarot_rate = 32  -- 4 * (32/4) per real game
 end)
 
 Sim.Voucher.reg("v_planet_tycoon", "Planet Tycoon", 2, "v_planet_merchant", function(state)
-    state._planet_rate_mult = 4
+    state._planet_rate = 32
 end)
 
 Sim.Voucher.reg("v_money_tree", "Money Tree", 2, "v_seed_money", function(state)
@@ -141,6 +142,7 @@ end)
 
 Sim.Voucher.reg("v_petroglyph", "Petroglyph", 2, "v_hieroglyph", function(state)
     state.ante = math.max(1, state.ante - 1)
+    state.discards = (state.discards or 3) - 1  -- Secondary: -1 discard per round
 end)
 
 Sim.Voucher.reg("v_retcon", "Retcon", 2, "v_directors_cut", function(state)

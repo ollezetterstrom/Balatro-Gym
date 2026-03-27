@@ -8,27 +8,19 @@
 Sim.Shop = {}
 
 --- Calculate card cost with discounts.
+--- Real formula: math.max(1, math.floor((base_cost + 0.5) * (100 - discount) / 100))
 local function apply_discount(base_cost, state)
     local discount = state._discount or 0
-    if discount > 0 then
-        return math.max(0, math.floor(base_cost * (100 - discount) / 100 + 0.5))
-    end
-    return base_cost
+    return math.max(1, math.floor((base_cost + 0.5) * (100 - discount) / 100))
 end
 
 --- Select a card type using weighted random (matches real game).
 --- Returns: "Joker", "Tarot", "Planet", or "Spectral"
 local function pick_card_type(state)
     local joker_rate = 20
-    local tarot_rate = 4
-    local planet_rate = 4
+    local tarot_rate = state._tarot_rate or 4    -- 9.6 with Tarot Merchant, 32 with Tycoon
+    local planet_rate = state._planet_rate or 4  -- 9.6 with Planet Merchant, 32 with Tycoon
     local spectral_rate = 0
-
-    -- Voucher modifiers
-    if Sim.CardFactory.has_voucher(state, "v_tarot_merchant") then tarot_rate = 8 end
-    if Sim.CardFactory.has_voucher(state, "v_tarot_tycoon") then tarot_rate = 16 end
-    if Sim.CardFactory.has_voucher(state, "v_planet_merchant") then planet_rate = 8 end
-    if Sim.CardFactory.has_voucher(state, "v_planet_tycoon") then planet_rate = 16 end
 
     local total = joker_rate + tarot_rate + planet_rate + spectral_rate
     local roll = Sim.RNG.next(state.rng) * total

@@ -36,7 +36,12 @@ function Sim.State.draw(state)
     if #state.hand >= state.hand_limit then return state end
     local n = math.min(state.hand_limit - #state.hand, #state.deck)
     for i = 1, n do
-        state.hand[#state.hand+1] = table.remove(state.deck, 1)
+        local card = table.remove(state.deck, 1)
+        -- Boss blind: stay_flipped check (The Wheel, House, Mark, Fish)
+        if card and Sim.Blind.stay_flipped(state, card) then
+            card._flipped = true
+        end
+        state.hand[#state.hand+1] = card
         state.cards_drawn = state.cards_drawn + 1
     end
     return state

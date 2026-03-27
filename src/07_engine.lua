@@ -187,5 +187,10 @@ function Sim.Engine.calculate(state, played)
         end
     end
 
+    -- Boss blind modify_hand hook (The Flint halves chips and mult)
+    local mod_chips, mod_mult = Sim.Blind.modify_hand(state, chips, mult)
+    if mod_chips then chips = mod_chips end
+    if mod_mult then mult = mod_mult end
+
     return math.floor(chips * mult), chips, mult, hand_type, scoring, all_hands
 end
