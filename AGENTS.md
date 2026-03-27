@@ -88,21 +88,25 @@ Return values:
 
 ## What Needs Work
 
-### Priority 1: More joker behaviors
-~100 jokers have `-- TODO` stubs. Each one needs its behavior ported from the real game's `card.lua:calculate_joker()` (lines 2291–4771). The real game file is at the SteamRIP path on Olle's machine:
-`C:\Users\ozett\Downloads\Balatro-SteamRIP.com\Balatro\Balatro\card.lua`
+See [roadmap.md](roadmap.md) for the full implementation plan with every quirk documented from the real game source. Summary:
 
-### Priority 2: Missing context hooks
-The engine doesn't fire `ctx.setting_blind`, `ctx.selling_self`, `ctx.selling_card`, `ctx.open_booster`, `ctx.ending_shop`, `ctx.skip_blind`, `ctx.skipping_booster`, `ctx.playing_card_added`, `ctx.first_hand_drawn`, `ctx.destroying_card`, `ctx.cards_destroyed`, `ctx.remove_playing_cards`, `ctx.on_after_play`. Many jokers need these.
+### Priority 1: Card creation foundation (`create_card()`)
+Build `Sim.create_card()` that handles rarity rolls, pool culling, Soul/Black Hole chances. Everything else depends on this. See roadmap Phase 2.
 
-### Priority 3: Evaluator joker integration
-Four Fingers (4 cards for flush/straight), Shortcut (skip ranks), Splash (all played cards score) need to change `get_flush`/`get_straight` behavior in `06_evaluator.lua`. Check `if next(find_joker('Four Fingers'))` pattern in real game.
+### Priority 2: Shop pool system
+Weighted card type selection (71% Joker, 14% Tarot, 14% Planet), proper pricing with discounts, edition rolls. See roadmap Phase 3.
 
-### Priority 4: More boss blinds
-Real game has 25+ boss blinds. We have 8. Missing ones include: The Ox, The Fish, The Psychic, The Mouth, The Tooth, The Eye, The Plant, The Serpent, Pillar, Flint, Mark, Amber Acorn, Verdant Leaf, Violet Vessel, Crimson Heart, Cerulean Bell.
+### Priority 3: Tags (24 tags)
+All 24 tags with 10 trigger types (immediate, new_blind_choice, store_joker_create, eval, voucher_add, tag_add, round_start_bonus, shop_start, shop_final_pass). See roadmap Phase 4.
 
-### Priority 5: Voucher system
-Not started. Vouchers are permanent upgrades bought in the shop.
+### Priority 4: Vouchers (32 vouchers)
+16 tier-1 + 16 tier-2 vouchers. Each modifies a game parameter. See roadmap Phase 5.
+
+### Priority 5: Boss blinds (30 bosses)
+25 regular + 5 showdown bosses. Suit debuffs, card flips, hand restrictions, money effects. See roadmap Phase 6.
+
+### Priority 6: Stub joker completion
+45 jokers need behavior. Many become easy once phases 2-5 exist. See roadmap Phase 7.
 
 ## Key Files For Reference
 
