@@ -352,6 +352,51 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
     end
     test("Sigil changes all suits", all_same)
 
+    -- === Card Factory ===
+    local cf_state = Sim.State.new({ seed="CF" })
+    cf_state._uid_n = 0
+    local cf_jk = Sim.CardFactory.create("Joker", cf_state, cf_state.rng, 1)
+    test("CardFactory creates common joker", cf_jk ~= nil and cf_jk.id > 0)
+    local cf_tarot = Sim.CardFactory.create("Tarot", cf_state, cf_state.rng)
+    test("CardFactory creates tarot", cf_tarot ~= nil and cf_tarot.id > 0)
+    local cf_planet = Sim.CardFactory.create("Planet", cf_state, cf_state.rng)
+    test("CardFactory creates planet", cf_planet ~= nil and cf_planet.id > 0)
+    local cf_card = Sim.CardFactory.create("Playing Card", cf_state, cf_state.rng)
+    test("CardFactory creates playing card", cf_card ~= nil and cf_card.rank >= 2)
+    test("CardFactory rarity pools", #Sim.JOKER_RARITY_POOLS[1] > 0 and #Sim.JOKER_RARITY_POOLS[4] == 5)
+
+    -- === Tags ===
+    local tag_state = Sim.State.new({ seed="TAG", dollars=0 })
+    tag_state.tags = {}
+    tag_state.skips = 0
+    tag_state.total_hands_played = 10
+    Sim.Tag.add(tag_state, "tag_handy")
+    test("Handy Tag gives $10 (10 hands)", tag_state.dollars == 10)
+    Sim.Tag.add(tag_state, "tag_top_up")
+    test("Top-up Tag creates 2 jokers", #tag_state.jokers == 2)
+
+    -- === Vouchers ===
+    local v_state = Sim.State.new({ seed="VCH" })
+    v_state.dollars = 50
+    v_state.vouchers = {}
+    Sim.Voucher.redeem(v_state, "v_grabber")
+    test("Grabber gives +1 hand", v_state.hands == 5)
+    Sim.Voucher.redeem(v_state, "v_overstock_norm")
+    test("Overstock gives +1 shop slot", v_state.shop_joker_max == 3)
+    Sim.Voucher.redeem(v_state, "v_seed_money")
+    test("Seed Money raises interest cap", v_state._interest_cap == 50)
+    test("Voucher definitions exist", Sim.Voucher.DEFS["v_antimatter"].tier == 2)
+
+    -- === Boss Blinds ===
+    test("28 boss blinds defined", #Sim.BOSS_BLINDS == 28)
+    local b_state = Sim.State.new({ seed="BOS" })
+    local boss1 = Sim.Blind.pick_boss(b_state, 1)
+    test("Ante 1 gets regular boss", not boss1.showdown)
+    local b_state8 = Sim.State.new({ seed="BOS8" })
+    local boss8 = Sim.Blind.pick_boss(b_state8, 8)
+    test("Ante 8 gets showdown boss", boss8.showdown == true)
+    test("Violet Vessel has 3x mult", Sim.BOSS_BLINDS[26].chip_mult == 3.0)
+
     print(string.format("\n  %d/%d tests passed\n", passed, total))
 
     -- ================================================================

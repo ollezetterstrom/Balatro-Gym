@@ -1623,6 +1623,706 @@ for _, def in pairs(Sim.JOKER_DEFS) do
     Sim.JOKER_POOL[#Sim.JOKER_POOL + 1] = def.id
 end
 
+--
+-- Provides Sim.create_card() for creating cards with proper pools, rarity rolls,
+-- and pool culling (removes owned cards, respects flags).
+--
+-- Depends on: 04_jokers.lua (Sim.JOKER_DEFS), 05_consumables.lua (Sim.CONSUMABLE_DEFS)
+
+Sim.CardFactory = {}
+
+--- Rarity pools (built from joker definitions)
+Sim.JOKER_RARITY_POOLS = { [1] = {}, [2] = {}, [3] = {}, [4] = {} }
+for _, def in pairs(Sim.JOKER_DEFS) do
+    local r = def.rarity or 1
+    Sim.JOKER_RARITY_POOLS[r] = Sim.JOKER_RARITY_POOLS[r] or {}
+    Sim.JOKER_RARITY_POOLS[r][#Sim.JOKER_RARITY_POOLS[r] + 1] = def.id
+end
+
+--- Consumable type pools
+Sim.TAROT_POOL = {}
+Sim.PLANET_POOL = {}
+Sim.SPECTRAL_POOL = {}
+for _, def in pairs(Sim.CONSUMABLE_DEFS) do
+    local k = def.key or ""
+    if k:find("pluto") or k:find("mercury") or k:find("venus") or k:find("earth") or
+       k:find("mars") or k:find("jupiter") or k:find("saturn") or k:find("neptune") or
+       k:find("uranus") or k:find("planet_x") or k:find("ceres") or k:find("eris") then
+        Sim.PLANET_POOL[#Sim.PLANET_POOL + 1] = def.id
+    elseif k:find("familiar") or k:find("grim") or k:find("incantation") or
+           k:find("talisman") or k:find("aura") or k:find("wraith") or
+           k:find("sigil") or k:find("ouija") or k:find("ectoplasm") or
+           k:find("immolate") or k:find("ankh") or k:find("deja_vu") or
+           k:find("hex") or k:find("trance") or k:find("medium") or k:find("cryptid") then
+        Sim.SPECTRAL_POOL[#Sim.SPECTRAL_POOL + 1] = def.id
+    else
+        Sim.TAROT_POOL[#Sim.TAROT_POOL + 1] = def.id
+    end
+end
+
+--- Playing card pool (52 standard cards)
+Sim.PLAYING_CARD_POOL = {}
+for suit = 1, 4 do
+    for rank = 2, 14 do
+        Sim.PLAYING_CARD_POOL[#Sim.PLAYING_CARD_POOL + 1] = { rank = rank, suit = suit }
+    end
+end
+
+--- Roll rarity for a joker. Returns 1-4.
+--- Uses pseudorandom seeded by ante (matches real game's rarity roll).
+function Sim.CardFactory.roll_rarity(state, rng)
+    local roll = Sim.RNG.next(rng)
+    if roll > 0.95 then return 3     -- Rare: 5%
+    elseif roll > 0.70 then return 2 -- Uncommon: 25%
+    else return 1                    -- Common: 70%
+    end
+end
+
+--- Get available joker IDs for a given rarity, excluding owned jokers.
+--- If showman is true, does NOT exclude owned jokers.
+function Sim.CardFactory.get_joker_pool(state, rarity, showman)
+    local pool = Sim.JOKER_RARITY_POOLS[rarity]
+    if not pool or #pool == 0 then return {} end
+    if showman then return pool end
+
+    -- Build set of owned joker IDs
+    local owned = {}
+    for _, jk in ipairs(state.jokers) do
+        owned[jk.id] = true
+    end
+
+    -- Filter out owned
+    local available = {}
+    for _, jid in ipairs(pool) do
+        if not owned[jid] then
+            local def = Sim._JOKER_BY_ID[jid]
+            -- Skip locked/undiscovered
+            if def and def.key ~= "j_locked" and def.key ~= "j_undiscovered" then
+                available[#available + 1] = jid
+            end
+        end
+    end
+    return available
+end
+
+--- Get available consumable IDs for a given type.
+--- type: "tarot", "planet", "spectral"
+function Sim.CardFactory.get_consumable_pool(state, ctype, showman)
+    local pool
+    if ctype == "tarot" then pool = Sim.TAROT_POOL
+    elseif ctype == "planet" then pool = Sim.PLANET_POOL
+    elseif ctype == "spectral" then pool = Sim.SPECTRAL_POOL
+    else return {}
+    end
+    if showman then return pool end
+
+    -- Filter out owned consumables
+    local owned = {}
+    for _, cs in ipairs(state.consumables) do
+        owned[cs.id] = true
+    end
+
+    local available = {}
+    for _, cid in ipairs(pool) do
+        if not owned[cid] then
+            available[#available + 1] = cid
+        end
+    end
+    return available
+end
+
+--- Create a card of the given type.
+---
+--- card_type: "Joker", "Tarot", "Planet", "Spectral", "Playing Card"
+--- state: game state
+--- rng: RNG instance
+--- rarity: (optional) for Joker type, force rarity 1-4. nil = roll.
+--- force_key: (optional) force a specific key instead of random
+--- showman: (optional) if true, don't exclude owned cards from pool
+---
+--- Returns: card table or nil if pool is empty
+function Sim.CardFactory.create(card_type, state, rng, rarity, force_key, showman)
+    if card_type == "Joker" then
+        -- Roll rarity if not specified
+        local r = rarity or Sim.CardFactory.roll_rarity(state, rng)
+        if r == 4 then r = 4 end  -- Legendary only via Soul
+
+        -- Check for Soul card (0.3% when creating Tarot/Spectral/Planet)
+        -- Legendary jokers only come from Soul card, not normal creation
+        if r == 4 then
+            local leg_pool = Sim.JOKER_RARITY_POOLS[4]
+            if not leg_pool or #leg_pool == 0 then return nil end
+            local jid = Sim.RNG.pick(rng, leg_pool)
+            return { id = jid, edition = 0, eternal = false, perishable = false,
+                     rental = false, uid = (state._uid_n or 0) + 1, _new = true }
+        end
+
+        -- Get pool for this rarity
+        local pool = Sim.CardFactory.get_joker_pool(state, r, showman)
+        if #pool == 0 then
+            -- Pool exhausted, try fallback to any rarity
+            for fallback_r = 1, 3 do
+                pool = Sim.CardFactory.get_joker_pool(state, fallback_r, showman)
+                if #pool > 0 then break end
+            end
+        end
+        if #pool == 0 then return nil end
+
+        local jid
+        if force_key then
+            local def = Sim.JOKER_DEFS[force_key]
+            jid = def and def.id or Sim.RNG.pick(rng, pool)
+        else
+            jid = Sim.RNG.pick(rng, pool)
+        end
+
+        -- Roll edition (from real game common_events.lua)
+        local edition = 0
+        local edition_roll = Sim.RNG.next(rng)
+        local edition_rate = state._edition_rate or 1.0
+        if edition_roll < 0.003 * edition_rate then
+            edition = 4  -- Negative
+        elseif edition_roll < 0.006 * edition_rate + 0.003 * edition_rate then
+            edition = 3  -- Polychrome
+        elseif edition_roll < 0.02 * edition_rate + 0.009 * edition_rate then
+            edition = 2  -- Holographic
+        elseif edition_roll < 0.04 * edition_rate + 0.029 * edition_rate then
+            edition = 1  -- Foil
+        end
+
+        state._uid_n = (state._uid_n or 0) + 1
+        return { id = jid, edition = edition, eternal = false, perishable = false,
+                 rental = false, uid = state._uid_n, _new = true }
+
+    elseif card_type == "Tarot" or card_type == "Planet" or card_type == "Spectral" then
+        -- Check for Soul / Black Hole chance (0.3%)
+        if card_type ~= "Planet" then
+            -- 0.3% chance for The Soul when creating Tarot or Spectral
+            local soul_roll = Sim.RNG.next(rng)
+            if soul_roll < 0.003 then
+                -- Create The Soul consumable (if exists)
+                local soul_def = Sim.CONSUMABLE_DEFS["c_soul"]
+                if soul_def then
+                    state._uid_n = (state._uid_n or 0) + 1
+                    return { id = soul_def.id, uid = state._uid_n, _new = true }
+                end
+            end
+        end
+        if card_type ~= "Tarot" then
+            -- 0.3% chance for Black Hole when creating Planet or Spectral
+            local bh_roll = Sim.RNG.next(rng)
+            if bh_roll < 0.003 then
+                local bh_def = Sim.CONSUMABLE_DEFS["c_black_hole"]
+                if bh_def then
+                    state._uid_n = (state._uid_n or 0) + 1
+                    return { id = bh_def.id, uid = state._uid_n, _new = true }
+                end
+            end
+        end
+
+        local ctype = card_type:lower()
+        local pool = Sim.CardFactory.get_consumable_pool(state, ctype, showman)
+        if #pool == 0 then return nil end
+
+        local cid
+        if force_key then
+            local def = Sim.CONSUMABLE_DEFS[force_key]
+            cid = def and def.id or Sim.RNG.pick(rng, pool)
+        else
+            cid = Sim.RNG.pick(rng, pool)
+        end
+
+        state._uid_n = (state._uid_n or 0) + 1
+        return { id = cid, uid = state._uid_n, _new = true }
+
+    elseif card_type == "Playing Card" then
+        -- Random playing card
+        local roll = Sim.RNG.pick(rng, Sim.PLAYING_CARD_POOL)
+        local rank = roll.rank
+        local suit = roll.suit
+        state._uid_n = (state._uid_n or 0) + 1
+        return Sim.Card.new(rank, suit, 0, 0, 0, state._uid_n)
+    end
+
+    return nil
+end
+
+--- Check if the player has a specific joker by key.
+function Sim.CardFactory.has_joker(state, key)
+    local def = Sim.JOKER_DEFS[key]
+    if not def then return false end
+    for _, jk in ipairs(state.jokers) do
+        if jk.id == def.id then return true end
+    end
+    return false
+end
+
+--- Check if the player has a specific voucher.
+function Sim.CardFactory.has_voucher(state, key)
+    return state.vouchers and state.vouchers[key] == true
+end
+
+--- Count cards in deck with a given enhancement.
+function Sim.CardFactory.count_enhancement(state, enhancement)
+    local count = 0
+    for _, c in ipairs(state.deck) do
+        if c.enhancement == enhancement then count = count + 1 end
+    end
+    return count
+end
+
+--- Count cards in deck with a given suit.
+function Sim.CardFactory.count_suit(state, suit)
+    local count = 0
+    for _, c in ipairs(state.deck) do
+        if c.suit == suit then count = count + 1 end
+    end
+    return count
+end
+
+--
+-- Tags are gained when blinds are skipped. Each tag has a trigger type
+-- that determines when it activates. All 24 tags implemented with
+-- exact configs from game.lua P_TAGS.
+
+Sim.Tag = {}
+Sim.Tag.DEFS = {}
+
+--- Register a tag definition.
+function Sim.Tag.reg(key, name, trigger_type, config, min_ante)
+    Sim.Tag.DEFS[key] = {
+        key = key, name = name, type = trigger_type,
+        config = config or {}, min_ante = min_ante,
+    }
+end
+
+-- === Tag definitions (from game.lua P_TAGS) ===
+
+Sim.Tag.reg("tag_uncommon",   "Uncommon Tag",      "store_joker_create", {rarity = 2}, nil)
+Sim.Tag.reg("tag_rare",       "Rare Tag",           "store_joker_create", {rarity = 3}, nil)
+Sim.Tag.reg("tag_negative",   "Negative Tag",       "store_joker_modify", {edition = 4}, 2)
+Sim.Tag.reg("tag_foil",       "Foil Tag",           "store_joker_modify", {edition = 1}, nil)
+Sim.Tag.reg("tag_holo",       "Holographic Tag",    "store_joker_modify", {edition = 2}, nil)
+Sim.Tag.reg("tag_polychrome", "Polychrome Tag",     "store_joker_modify", {edition = 3}, nil)
+Sim.Tag.reg("tag_investment", "Investment Tag",     "eval",               {dollars = 25}, nil)
+Sim.Tag.reg("tag_voucher",    "Voucher Tag",        "voucher_add",        {}, nil)
+Sim.Tag.reg("tag_boss",       "Boss Tag",           "new_blind_choice",   {}, nil)
+Sim.Tag.reg("tag_standard",   "Standard Tag",       "new_blind_choice",   {}, 2)
+Sim.Tag.reg("tag_charm",      "Charm Tag",          "new_blind_choice",   {}, nil)
+Sim.Tag.reg("tag_meteor",     "Meteor Tag",         "new_blind_choice",   {}, 2)
+Sim.Tag.reg("tag_buffoon",    "Buffoon Tag",        "new_blind_choice",   {}, 2)
+Sim.Tag.reg("tag_handy",      "Handy Tag",          "immediate",          {dollars_per_hand = 1}, 2)
+Sim.Tag.reg("tag_garbage",    "Garbage Tag",        "immediate",          {dollars_per_discard = 1}, 2)
+Sim.Tag.reg("tag_ethereal",   "Ethereal Tag",       "new_blind_choice",   {}, 2)
+Sim.Tag.reg("tag_coupon",     "Coupon Tag",         "shop_final_pass",    {}, nil)
+Sim.Tag.reg("tag_double",     "Double Tag",         "tag_add",            {}, nil)
+Sim.Tag.reg("tag_juggle",     "Juggle Tag",         "round_start_bonus",  {h_size = 3}, nil)
+Sim.Tag.reg("tag_d_six",      "D6 Tag",             "shop_start",         {}, nil)
+Sim.Tag.reg("tag_top_up",     "Top-up Tag",         "immediate",          {spawn_jokers = 2}, 2)
+Sim.Tag.reg("tag_skip",       "Skip Tag",           "immediate",          {skip_bonus = 5}, nil)
+Sim.Tag.reg("tag_orbital",    "Orbital Tag",        "immediate",          {levels = 3}, 2)
+Sim.Tag.reg("tag_economy",    "Economy Tag",        "immediate",          {max = 40}, nil)
+
+--- Add a tag to the state. Returns true if added.
+function Sim.Tag.add(state, tag_key)
+    if not Sim.Tag.DEFS[tag_key] then return false end
+    state.tags = state.tags or {}
+    local tag = { key = tag_key, triggered = false, config = Sim.Tag.DEFS[tag_key].config }
+    state.tags[#state.tags + 1] = tag
+
+    -- Fire immediate tags right away
+    local def = Sim.Tag.DEFS[tag_key]
+    if def.type == "immediate" then
+        Sim.Tag.apply_immediate(state, tag, def)
+    end
+
+    -- Double Tag: when any tag is gained, copy it
+    for _, existing in ipairs(state.tags) do
+        if existing ~= tag and existing.key == "tag_double" and not existing.triggered then
+            if tag_key ~= "tag_double" then
+                existing.triggered = true
+                Sim.Tag.add(state, tag_key)
+            end
+        end
+    end
+
+    return true
+end
+
+--- Apply an immediate tag effect.
+function Sim.Tag.apply_immediate(state, tag, def)
+    if tag.triggered then return end
+    local cfg = def.config or {}
+
+    if def.key == "tag_handy" then
+        local earned = (state.total_hands_played or 0) * (cfg.dollars_per_hand or 1)
+        state.dollars = state.dollars + earned
+    elseif def.key == "tag_garbage" then
+        local earned = (state.total_unused_discards or 0) * (cfg.dollars_per_discard or 1)
+        state.dollars = state.dollars + earned
+    elseif def.key == "tag_skip" then
+        local earned = (state.skips or 0) * (cfg.skip_bonus or 5)
+        state.dollars = state.dollars + earned
+    elseif def.key == "tag_economy" then
+        local max = cfg.max or 40
+        local earned = math.min(max, math.max(0, state.dollars))
+        state.dollars = state.dollars + earned
+    elseif def.key == "tag_top_up" then
+        local count = cfg.spawn_jokers or 2
+        for i = 1, count do
+            if #state.jokers < state.joker_slots then
+                local jk = Sim.CardFactory.create("Joker", state, state.rng, 1)  -- Common only
+                if jk then
+                    local jdef = Sim._JOKER_BY_ID[jk.id]
+                    if jdef then Sim.State.add_joker(state, jdef) end
+                end
+            end
+        end
+    elseif def.key == "tag_orbital" then
+        -- Level up most played hand by 3
+        local best_hand = nil
+        local best_count = 0
+        for ht, count in pairs(state.hand_type_counts or {}) do
+            if type(ht) == "number" and count > best_count then
+                best_count = count
+                best_hand = ht
+            end
+        end
+        if best_hand then
+            state.hand_levels[best_hand] = (state.hand_levels[best_hand] or 1) + (cfg.levels or 3)
+            Sim.State.level_up(state, best_hand)
+        end
+    end
+
+    tag.triggered = true
+end
+
+--- Apply tags for a context (eval, new_blind_choice, store_joker_create, etc.)
+--- Returns effects that should be applied.
+function Sim.Tag.apply(state, context_type, context)
+    if not state.tags then return {} end
+    local effects = {}
+
+    for _, tag in ipairs(state.tags) do
+        if not tag.triggered then
+            local def = Sim.Tag.DEFS[tag.key]
+            if def and def.type == context_type then
+                if context_type == "eval" then
+                    -- Investment Tag: +$25 after defeating boss
+                    if tag.key == "tag_investment" and context and context.was_boss then
+                        state.dollars = state.dollars + (tag.config.dollars or 25)
+                        tag.triggered = true
+                    end
+                elseif context_type == "new_blind_choice" then
+                    -- Pack tags: open a free pack
+                    if tag.key == "tag_charm" then
+                        effects[#effects + 1] = { type = "free_pack", pack = "arcana_mega" }
+                        tag.triggered = true
+                    elseif tag.key == "tag_meteor" then
+                        effects[#effects + 1] = { type = "free_pack", pack = "celestial_mega" }
+                        tag.triggered = true
+                    elseif tag.key == "tag_standard" then
+                        effects[#effects + 1] = { type = "free_pack", pack = "standard_mega" }
+                        tag.triggered = true
+                    elseif tag.key == "tag_buffoon" then
+                        effects[#effects + 1] = { type = "free_pack", pack = "buffoon_mega" }
+                        tag.triggered = true
+                    elseif tag.key == "tag_ethereal" then
+                        effects[#effects + 1] = { type = "free_pack", pack = "spectral_normal" }
+                        tag.triggered = true
+                    elseif tag.key == "tag_boss" then
+                        effects[#effects + 1] = { type = "reroll_boss" }
+                        tag.triggered = true
+                    end
+                elseif context_type == "store_joker_create" then
+                    -- Uncommon/Rare Tag: create free joker
+                    if tag.key == "tag_uncommon" then
+                        local jk = Sim.CardFactory.create("Joker", state, state.rng, 2)
+                        if jk then
+                            effects[#effects + 1] = { type = "free_joker", joker = jk }
+                        end
+                        tag.triggered = true
+                    elseif tag.key == "tag_rare" then
+                        local pool = Sim.CardFactory.get_joker_pool(state, 3)
+                        if #pool > 0 then
+                            local jk = Sim.CardFactory.create("Joker", state, state.rng, 3)
+                            if jk then
+                                effects[#effects + 1] = { type = "free_joker", joker = jk }
+                            end
+                        end
+                        tag.triggered = true
+                    end
+                elseif context_type == "store_joker_modify" then
+                    -- Edition tags: apply edition to first uneditioned joker
+                    if tag.key == "tag_foil" or tag.key == "tag_holo" or
+                       tag.key == "tag_polychrome" or tag.key == "tag_negative" then
+                        if context and context.joker then
+                            local jk = context.joker
+                            if jk.edition == 0 then
+                                jk.edition = tag.config.edition or 0
+                                effects[#effects + 1] = { type = "edition_applied", edition = jk.edition }
+                            end
+                        end
+                        tag.triggered = true
+                    end
+                elseif context_type == "shop_start" then
+                    -- D6 Tag: first reroll free
+                    if tag.key == "tag_d_six" then
+                        state._reroll_cost = 0
+                        tag.triggered = true
+                    end
+                elseif context_type == "shop_final_pass" then
+                    -- Coupon Tag: all items free
+                    if tag.key == "tag_coupon" then
+                        effects[#effects + 1] = { type = "all_free" }
+                        tag.triggered = true
+                    end
+                elseif context_type == "round_start_bonus" then
+                    -- Juggle Tag: +3 hand size this round
+                    if tag.key == "tag_juggle" then
+                        local h = tag.config.h_size or 3
+                        state.hand_limit = (state.hand_limit or 8) + h
+                        state._juggle_bonus = (state._juggle_bonus or 0) + h
+                        tag.triggered = true
+                    end
+                elseif context_type == "voucher_add" then
+                    -- Voucher Tag: extra voucher in shop
+                    if tag.key == "tag_voucher" then
+                        effects[#effects + 1] = { type = "extra_voucher" }
+                        tag.triggered = true
+                    end
+                end
+            end
+        end
+    end
+
+    return effects
+end
+
+--- Pick a random tag that's available at the given ante.
+function Sim.Tag.pick(state)
+    local available = {}
+    local ante = state.ante or 1
+    local owned = {}
+    for _, tag in ipairs(state.tags or {}) do
+        owned[tag.key] = true
+    end
+    for key, def in pairs(Sim.Tag.DEFS) do
+        if not owned[key] then
+            if not def.min_ante or ante >= def.min_ante then
+                available[#available + 1] = key
+            end
+        end
+    end
+    if #available == 0 then return nil end
+    return available[Sim.RNG.int(state.rng, 1, #available)]
+end
+
+--
+-- Vouchers are permanent upgrades bought in the shop. Each has a tier 1
+-- base version and a tier 2 upgrade. Tier 2 requires having redeemed tier 1.
+-- All vouchers cost $10 in the real game.
+
+Sim.Voucher = {}
+Sim.Voucher.DEFS = {}
+
+--- Register a voucher definition.
+function Sim.Voucher.reg(key, name, tier, requires, apply_fn)
+    Sim.Voucher.DEFS[key] = {
+        key = key, name = name, tier = tier,
+        requires = requires, apply = apply_fn, cost = 10,
+    }
+end
+
+--- Apply voucher effects to state.
+--- Called when voucher is redeemed (bought from shop).
+
+-- === Tier 1 (Base) Vouchers ===
+
+Sim.Voucher.reg("v_overstock_norm", "Overstock", 1, nil, function(state)
+    state.shop_joker_max = (state.shop_joker_max or 2) + 1
+end)
+
+Sim.Voucher.reg("v_clearance_sale", "Clearance Sale", 1, nil, function(state)
+    state._discount = 25
+end)
+
+Sim.Voucher.reg("v_hone", "Hone", 1, nil, function(state)
+    state._edition_rate = 2.0
+end)
+
+Sim.Voucher.reg("v_reroll_surplus", "Reroll Surplus", 1, nil, function(state)
+    state._reroll_discount = 2
+end)
+
+Sim.Voucher.reg("v_crystal_ball", "Crystal Ball", 1, nil, function(state)
+    state.consumable_slots = (state.consumable_slots or 2) + 1
+end)
+
+Sim.Voucher.reg("v_telescope", "Telescope", 1, nil, function(state)
+    state._telescope = true
+end)
+
+Sim.Voucher.reg("v_grabber", "Grabber", 1, nil, function(state)
+    state.hands = (state.hands or 4) + 1
+end)
+
+Sim.Voucher.reg("v_wasteful", "Wasteful", 1, nil, function(state)
+    state.discards = (state.discards or 3) + 1
+end)
+
+Sim.Voucher.reg("v_tarot_merchant", "Tarot Merchant", 1, nil, function(state)
+    state._tarot_rate_mult = 2
+end)
+
+Sim.Voucher.reg("v_planet_merchant", "Planet Merchant", 1, nil, function(state)
+    state._planet_rate_mult = 2
+end)
+
+Sim.Voucher.reg("v_seed_money", "Seed Money", 1, nil, function(state)
+    state._interest_cap = 50
+end)
+
+Sim.Voucher.reg("v_blank", "Blank", 1, nil, function(state)
+    -- Does nothing (required for Antimatter)
+end)
+
+Sim.Voucher.reg("v_magic_trick", "Magic Trick", 1, nil, function(state)
+    state._magic_trick = true
+end)
+
+Sim.Voucher.reg("v_hieroglyph", "Hieroglyph", 1, nil, function(state)
+    state.ante = math.max(1, state.ante - 1)
+end)
+
+Sim.Voucher.reg("v_directors_cut", "Director's Cut", 1, nil, function(state)
+    state._directors_cut = true
+end)
+
+Sim.Voucher.reg("v_paint_brush", "Paint Brush", 1, nil, function(state)
+    state.hand_limit = (state.hand_limit or 8) + 1
+end)
+
+-- === Tier 2 (Upgrades) ===
+
+Sim.Voucher.reg("v_overstock_plus", "Overstock Plus", 2, "v_overstock_norm", function(state)
+    state.shop_joker_max = (state.shop_joker_max or 2) + 1
+end)
+
+Sim.Voucher.reg("v_liquidation", "Liquidation", 2, "v_clearance_sale", function(state)
+    state._discount = 50
+end)
+
+Sim.Voucher.reg("v_glow_up", "Glow Up", 2, "v_hone", function(state)
+    state._edition_rate = 4.0
+end)
+
+Sim.Voucher.reg("v_reroll_glut", "Reroll Glut", 2, "v_reroll_surplus", function(state)
+    state._reroll_discount = 4
+end)
+
+Sim.Voucher.reg("v_omen_globe", "Omen Globe", 2, "v_crystal_ball", function(state)
+    state.consumable_slots = (state.consumable_slots or 2) + 1
+    state._omen_globe = true  -- Spectrals in Arcana packs
+end)
+
+Sim.Voucher.reg("v_observatory", "Observatory", 2, "v_telescope", function(state)
+    state._observatory = true  -- Planets in hand give x1.5 mult
+end)
+
+Sim.Voucher.reg("v_nacho_tong", "Nacho Tong", 2, "v_grabber", function(state)
+    state.hands = (state.hands or 4) + 1
+end)
+
+Sim.Voucher.reg("v_recyclomancy", "Recyclomancy", 2, "v_wasteful", function(state)
+    state.discards = (state.discards or 3) + 1
+end)
+
+Sim.Voucher.reg("v_tarot_tycoon", "Tarot Tycoon", 2, "v_tarot_merchant", function(state)
+    state._tarot_rate_mult = 4
+end)
+
+Sim.Voucher.reg("v_planet_tycoon", "Planet Tycoon", 2, "v_planet_merchant", function(state)
+    state._planet_rate_mult = 4
+end)
+
+Sim.Voucher.reg("v_money_tree", "Money Tree", 2, "v_seed_money", function(state)
+    state._interest_cap = 100
+end)
+
+Sim.Voucher.reg("v_antimatter", "Antimatter", 2, "v_blank", function(state)
+    state.joker_slots = (state.joker_slots or 5) + 1
+end)
+
+Sim.Voucher.reg("v_illusion", "Illusion", 2, "v_magic_trick", function(state)
+    state._illusion = true  -- Playing cards can have editions/enhancements
+end)
+
+Sim.Voucher.reg("v_petroglyph", "Petroglyph", 2, "v_hieroglyph", function(state)
+    state.ante = math.max(1, state.ante - 1)
+end)
+
+Sim.Voucher.reg("v_retcon", "Retcon", 2, "v_directors_cut", function(state)
+    state._retcon = true  -- Unlimited boss rerolls at $10
+end)
+
+Sim.Voucher.reg("v_palette", "Palette", 2, "v_paint_brush", function(state)
+    state.hand_limit = (state.hand_limit or 8) + 1
+end)
+
+--- Redeem (buy) a voucher. Applies its effect and marks it as owned.
+function Sim.Voucher.redeem(state, voucher_key)
+    local def = Sim.Voucher.DEFS[voucher_key]
+    if not def then return false end
+
+    -- Check prerequisites
+    if def.requires and not (state.vouchers and state.vouchers[def.requires]) then
+        return false
+    end
+
+    -- Check if already owned
+    if state.vouchers and state.vouchers[voucher_key] then return false end
+
+    -- Deduct cost
+    local cost = def.cost or 10
+    local discount = state._discount or 0
+    if discount > 0 then
+        cost = math.max(0, math.floor(cost * (100 - discount) / 100 + 0.5))
+    end
+    if state.dollars < cost then return false end
+    state.dollars = state.dollars - cost
+
+    -- Mark as owned
+    state.vouchers = state.vouchers or {}
+    state.vouchers[voucher_key] = true
+
+    -- Apply effect
+    if def.apply then def.apply(state) end
+
+    return true
+end
+
+--- Get the next voucher available in a tier chain.
+--- Returns a voucher key that can appear in the shop.
+function Sim.Voucher.get_next(state)
+    state.vouchers = state.vouchers or {}
+    local available = {}
+
+    for key, def in pairs(Sim.Voucher.DEFS) do
+        -- Not already owned
+        if not state.vouchers[key] then
+            -- Check prerequisites
+            if not def.requires or state.vouchers[def.requires] then
+                -- Tier 1 always available, tier 2 needs tier 1
+                available[#available + 1] = key
+            end
+        end
+    end
+
+    if #available == 0 then return nil end
+    return available[Sim.RNG.int(state.rng, 1, #available)]
+end
+
 
 Sim.Eval = {}
 
@@ -2130,40 +2830,95 @@ local BLIND_DATA = {
 local SUIT = Sim.ENUMS.SUIT
 
 Sim.BOSS_BLINDS = {
-    { name = "The Wall",     chip_mult = 2.0, setup = function(st) end },
-    { name = "The Arm",      chip_mult = 1.0, setup = function(st) end },
-    { name = "The Water",    chip_mult = 1.0, setup = function(st) st.discards_left = 0 end },
-    { name = "The Manacle",  chip_mult = 1.0, setup = function(st) st.hand_limit = st.hand_limit - 1 end },
-    { name = "The Needle",   chip_mult = 1.0, setup = function(st) st.hands_left = 1 end },
-    { name = "The Club",     chip_mult = 1.0, setup = function(st) st._boss_debuff_suit = SUIT.CLUBS end },
-    { name = "The Goad",     chip_mult = 1.0, setup = function(st) st._boss_debuff_suit = SUIT.SPADES end },
-    { name = "The Window",   chip_mult = 1.0, setup = function(st) st._boss_debuff_suit = SUIT.DIAMONDS end },
+    -- Regular bosses (25)
+    { name = "The Club",       chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.CLUBS end },
+    { name = "The Goad",       chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.SPADES end },
+    { name = "The Head",       chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.HEARTS end },
+    { name = "The Window",     chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.DIAMONDS end },
+    { name = "The Psychic",    chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_must_play_5 = true end },
+    { name = "The Hook",       chip_mult = 1.0, min_ante = 1, setup = function(st) end },
+    { name = "The Manacle",    chip_mult = 1.0, min_ante = 1, setup = function(st) st.hand_limit = st.hand_limit - 1 end },
+    { name = "The Water",      chip_mult = 1.0, min_ante = 2, setup = function(st) st.discards_left = 0 end },
+    { name = "The Wall",       chip_mult = 2.0, min_ante = 2, setup = function(st) end },
+    { name = "The House",      chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_flip_first = true end },
+    { name = "The Arm",        chip_mult = 1.0, min_ante = 2, setup = function(st) end },
+    { name = "The Wheel",      chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_flip_chance = 1/7 end },
+    { name = "The Fish",       chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_flip_after_play = true end },
+    { name = "The Mouth",      chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_one_hand_type = true end },
+    { name = "The Mark",       chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_flip_faces = true end },
+    { name = "The Tooth",      chip_mult = 1.0, min_ante = 3, setup = function(st) end },
+    { name = "The Eye",        chip_mult = 1.0, min_ante = 3, setup = function(st) st._boss_no_repeat = true end },
+    { name = "The Plant",      chip_mult = 1.0, min_ante = 4, setup = function(st) st._boss_debuff_faces = true end },
+    { name = "The Needle",     chip_mult = 0.5, min_ante = 2, setup = function(st) st.hands_left = 1 end },
+    { name = "The Pillar",     chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_played = true end },
+    { name = "The Serpent",    chip_mult = 1.0, min_ante = 5, setup = function(st) st._boss_serpent = true end },
+    { name = "The Ox",         chip_mult = 1.0, min_ante = 6, setup = function(st) st._boss_ox = true end },
+    { name = "The Flint",      chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_halve = true end },
+    -- Showdown bosses (ante 8 only, 5)
+    { name = "Cerulean Bell",  chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) st._boss_force_select = true end },
+    { name = "Verdant Leaf",   chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) st._boss_debuff_all = true end },
+    { name = "Violet Vessel",  chip_mult = 3.0, min_ante = 8, showdown = true, setup = function(st) end },
+    { name = "Amber Acorn",    chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) st._boss_shuffle_jokers = true end },
+    { name = "Crimson Heart",  chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) st._boss_debuff_random_joker = true end },
 }
 
 function Sim.Blind.pick_boss(state, ante)
     -- Boss rotation: don't repeat until all seen
     if not state._bosses_seen then state._bosses_seen = {} end
 
-    -- If all bosses have been seen, reset
-    local all_seen = true
+    -- Filter to eligible bosses (ante range, showdown only on ante 8)
+    local eligible = {}
+    local is_showdown = (ante % 8 == 0 and ante >= 8)
     for i = 1, #Sim.BOSS_BLINDS do
-        if not state._bosses_seen[i] then all_seen = false; break end
+        local boss = Sim.BOSS_BLINDS[i]
+        local min = boss.min_ante or 1
+        if boss.showdown then
+            if is_showdown and ante >= min then
+                eligible[#eligible + 1] = i
+            end
+        else
+            if ante >= min and not is_showdown then
+                eligible[#eligible + 1] = i
+            end
+        end
+    end
+
+    -- If all eligible bosses seen, reset
+    local all_seen = true
+    for _, idx in ipairs(eligible) do
+        if not state._bosses_seen[idx] then all_seen = false; break end
     end
     if all_seen then state._bosses_seen = {} end
 
-    -- Pick from unseen bosses
+    -- Pick from unseen eligible
     local unseen = {}
-    for i = 1, #Sim.BOSS_BLINDS do
-        if not state._bosses_seen[i] then unseen[#unseen+1] = i end
+    for _, idx in ipairs(eligible) do
+        if not state._bosses_seen[idx] then unseen[#unseen+1] = idx end
     end
+    if #unseen == 0 then unseen = eligible end
     local idx = Sim.RNG.pick(state.rng, unseen)
     state._bosses_seen[idx] = true
     return Sim.BOSS_BLINDS[idx]
 end
 
 function Sim.Blind.is_card_debuffed(state, card)
-    if not state._boss_debuff_suit then return false end
-    return card.suit == state._boss_debuff_suit
+    -- Suit debuffs (Club, Goad/Spade, Head/Heart, Window/Diamond)
+    if state._boss_debuff_suit and card.suit == state._boss_debuff_suit then
+        return true
+    end
+    -- Face card debuff (The Plant)
+    if state._boss_debuff_faces and card.rank >= 11 and card.rank <= 13 then
+        return true
+    end
+    -- Verdent Leaf: debuff ALL cards until a joker is sold
+    if state._boss_debuff_all then
+        return true
+    end
+    -- Cards played this ante debuff (The Pillar)
+    if state._boss_debuff_played and card._played_this_ante then
+        return true
+    end
+    return false
 end
 
 function Sim.Blind.on_play(state, played_cards)
@@ -2172,6 +2927,54 @@ function Sim.Blind.on_play(state, played_cards)
         local ht = Sim.Eval.get_hand(played_cards, state)
         if state.hand_levels[ht] and state.hand_levels[ht] > 1 then
             state.hand_levels[ht] = state.hand_levels[ht] - 1
+        end
+    end
+    -- Boss: The Tooth — -$1 per card played
+    if state.boss_name == "The Tooth" then
+        state.dollars = math.max(0, state.dollars - #played_cards)
+    end
+    -- Boss: The Ox — if play most played hand type, set money to 0
+    if state.boss_name == "The Ox" and state._boss_ox then
+        local ht = Sim.Eval.get_hand(played_cards, state)
+        local hand_name = Sim.ENUMS.HAND_NAME[ht]
+        if hand_name then
+            local most_played = state._most_played_hand
+            if most_played and hand_name == most_played then
+                state.dollars = 0
+            end
+        end
+    end
+    -- Boss: The Psychic — must play exactly 5 cards
+    if state.boss_name == "The Psychic" and #played_cards ~= 5 then
+        -- Hand is invalidated (debuffed)
+        state._boss_invalid_hand = true
+    end
+    -- Boss: The Eye — can't repeat hand type
+    if state.boss_name == "The Eye" and state._boss_no_repeat then
+        local ht = Sim.Eval.get_hand(played_cards, state)
+        state._played_hand_types = state._played_hand_types or {}
+        if state._played_hand_types[ht] then
+            state._boss_invalid_hand = true
+        end
+        state._played_hand_types[ht] = true
+    end
+    -- Boss: The Mouth — can only play one hand type
+    if state.boss_name == "The Mouth" and state._boss_one_hand_type then
+        local ht = Sim.Eval.get_hand(played_cards, state)
+        if state._mouth_allowed_type and ht ~= state._mouth_allowed_type then
+            state._boss_invalid_hand = true
+        elseif not state._mouth_allowed_type then
+            state._mouth_allowed_type = ht
+        end
+    end
+    -- Boss: The Flint — halves both chips and mult
+    if state._boss_halve then
+        state._boss_halve_applied = true
+    end
+    -- Track played cards for The Pillar
+    if state._boss_debuff_played then
+        for _, c in ipairs(played_cards) do
+            c._played_this_ante = true
         end
     end
 end
@@ -2261,56 +3064,157 @@ function Sim.Blind.mark_done(state, btype, skipped)
     state._blind_states[names[btype]] = skipped and "skipped" or "done"
 end
 
+--
+-- Shop generation uses weighted card type selection:
+--   Joker: 71.4%, Tarot: 14.3%, Planet: 14.3%
+-- Pricing respects discounts and vouchers.
+-- Edition rolls match real game probabilities.
 
 Sim.Shop = {}
 
-function Sim.Shop.generate(state)
-    local shop = { jokers = {}, booster = nil, consumable = nil }
-    local pool = Sim.JOKER_POOL
+--- Calculate card cost with discounts.
+local function apply_discount(base_cost, state)
+    local discount = state._discount or 0
+    if discount > 0 then
+        return math.max(0, math.floor(base_cost * (100 - discount) / 100 + 0.5))
+    end
+    return base_cost
+end
+
+--- Select a card type using weighted random (matches real game).
+--- Returns: "Joker", "Tarot", "Planet", or "Spectral"
+local function pick_card_type(state)
+    local joker_rate = 20
+    local tarot_rate = 4
+    local planet_rate = 4
+    local spectral_rate = 0
+
+    -- Voucher modifiers
+    if Sim.CardFactory.has_voucher(state, "v_tarot_merchant") then tarot_rate = 8 end
+    if Sim.CardFactory.has_voucher(state, "v_tarot_tycoon") then tarot_rate = 16 end
+    if Sim.CardFactory.has_voucher(state, "v_planet_merchant") then planet_rate = 8 end
+    if Sim.CardFactory.has_voucher(state, "v_planet_tycoon") then planet_rate = 16 end
+
+    local total = joker_rate + tarot_rate + planet_rate + spectral_rate
+    local roll = Sim.RNG.next(state.rng) * total
+
+    if roll < joker_rate then return "Joker"
+    elseif roll < joker_rate + tarot_rate then return "Tarot"
+    elseif roll < joker_rate + tarot_rate + planet_rate then return "Planet"
+    else return "Spectral"
+    end
+end
+
+--- Generate a shop slot (could be joker, tarot, or planet).
+local function generate_shop_slot(state, slot_num)
+    local card_type = pick_card_type(state)
+    local card = Sim.CardFactory.create(card_type, state, state.rng)
+    if not card then return nil end
+
+    if card_type == "Joker" then
+        local def = Sim._JOKER_BY_ID[card.id]
+        if not def then return nil end
+        local base_cost = def.cost or 3
+        return { type = "joker", joker_id = card.id, cost = apply_discount(base_cost, state),
+                 edition = card.edition, slot = slot_num, uid = card.uid }
+    else
+        -- Consumable
+        local def = Sim.CONSUMABLE_DEFS
+        local name = nil
+        for k, v in pairs(def) do
+            if v.id == card.id then name = v.name; break end
+        end
+        local base_cost = card_type == "Planet" and 3 or 3
+        return { type = "consumable", cons_id = card.id, cost = apply_discount(base_cost, state),
+                 card_type = card_type, slot = slot_num, uid = card.uid }
+    end
+end
+
+--- Generate boosters for the shop.
+local function generate_boosters(state)
+    local boosters = {}
+    -- Always 2 booster slots
     for i = 1, 2 do
-        local jid = Sim.RNG.pick(state.rng, pool)
-        local def = Sim._JOKER_BY_ID[jid]
-        shop.jokers[i] = { joker_id = jid, cost = def.cost or 3, slot = i }
+        local roll = Sim.RNG.next(state.rng)
+        local pack_type, cost, picks
+        if roll < 0.4 then
+            pack_type = "buffoon_normal"; cost = apply_discount(4, state); picks = 1
+        elseif roll < 0.7 then
+            pack_type = "buffoon_jumbo"; cost = apply_discount(6, state); picks = 1
+        else
+            pack_type = "arcana_normal"; cost = apply_discount(4, state); picks = 1
+        end
+        boosters[i] = { type = "booster", pack_type = pack_type, cost = cost, picks = picks, slot = 100 + i }
     end
-    shop.booster = { cost = 4, pack_type = "buffoon", slot = 3 }
-    -- Free consumable slot
-    if #state.consumables < state.consumable_slots then
-        local cid = Sim.RNG.pick(state.rng, Sim.CONS_POOL)
-        shop.consumable = { cons_id = cid, cost = 0, slot = 4 }
+    return boosters
+end
+
+function Sim.Shop.generate(state)
+    local joker_max = 2
+    -- Voucher modifiers for shop slots
+    if Sim.CardFactory.has_voucher(state, "v_overstock_norm") then joker_max = joker_max + 1 end
+    if Sim.CardFactory.has_voucher(state, "v_overstock_plus") then joker_max = joker_max + 1 end
+
+    local shop = { items = {}, boosters = {}, voucher = nil, jokers = {} }
+
+    -- Generate card slots (joker_max total, weighted by type)
+    for i = 1, joker_max do
+        local item = generate_shop_slot(state, i)
+        if item then
+            shop.items[#shop.items + 1] = item
+            if item.type == "joker" then
+                shop.jokers[i] = item  -- Keep backward compat
+            end
+        end
     end
+
+    -- Generate boosters
+    shop.boosters = generate_boosters(state)
+    -- Keep backward compat: first booster
+    shop.booster = shop.boosters[1]
+
+    -- Consumable slot (if room)
+    if #state.consumables < (state.consumable_slots or 2) then
+        local cons_card = Sim.CardFactory.create(pick_card_type(state), state, state.rng)
+        if cons_card then
+            shop.consumable = { cons_id = cons_card.id, cost = 0, slot = 99, uid = cons_card.uid }
+        end
+    end
+
     state.shop = shop
     return state
 end
 
 function Sim.Shop.reroll(state)
     if not state.shop then return state end
-    local pool = Sim.JOKER_POOL
-    -- Replace all joker slots with new random jokers
-    for i = 1, 2 do
-        local jid = Sim.RNG.pick(state.rng, pool)
-        local def = Sim._JOKER_BY_ID[jid]
-        state.shop.jokers[i] = { joker_id = jid, cost = def.cost or 3, slot = i }
-    end
-    -- Replace consumable slot if room
-    if #state.consumables < state.consumable_slots then
-        local cid = Sim.RNG.pick(state.rng, Sim.CONS_POOL)
-        state.shop.consumable = { cons_id = cid, cost = 0, slot = 4 }
-    else
-        state.shop.consumable = nil
-    end
-    return state
+    -- Reroll costs
+    local base_cost = state._reroll_cost or 5
+    local discount = state._reroll_discount or 0
+    local cost = math.max(0, base_cost - discount)
+    if state.dollars < cost then return false end
+    state.dollars = state.dollars - cost
+    state._reroll_cost = (state._reroll_cost or 5) + 1
+
+    -- Regenerate
+    return Sim.Shop.generate(state)
 end
 
 function Sim.Shop.buy_joker(state, slot)
-    if not state.shop or not state.shop.jokers[slot] then return false end
+    if not state.shop then return false end
     local item = state.shop.jokers[slot]
+    if not item then return false end
     if state.dollars < item.cost then return false end
     local def = Sim._JOKER_BY_ID[item.joker_id]
     if not def then return false end
     if #state.jokers >= state.joker_slots then return false end
     state.dollars = state.dollars - item.cost
-    Sim.State.add_joker(state, def)
+    local jk = Sim.State.add_joker(state, def)
+    if jk and item.edition then jk.edition = item.edition end
     state.shop.jokers[slot] = nil
+    -- Also remove from items list
+    for i, it in ipairs(state.shop.items) do
+        if it == item then table.remove(state.shop.items, i); break end
+    end
     return true
 end
 
@@ -2880,6 +3784,10 @@ local function _step_selecting(state, atype, value)
         if value == 3 and state.blind_beaten then
             return Sim._advance_blind(state)
         end
+        -- value 2 = skip blind
+        if value == 2 and not state.blind_beaten then
+            return Sim._skip_blind(state)
+        end
 
     elseif atype == E.ACTION.USE_CONSUMABLE then
         return Sim._use_consumable(state, value)
@@ -2935,6 +3843,66 @@ function Sim._advance_blind(state)
         Sim.Blind.init_ante(state)
         next_btype = Sim.Blind.next_type(state)
         -- Voucher reset would go here
+        Sim.Shop.generate(state)
+        state.phase = E.PHASE.SHOP
+        return Sim.Obs.encode(state), R.ANTE_UP, false
+    else
+        Sim.Blind.setup(state, next_btype)
+        state.phase = E.PHASE.SELECTING_HAND
+        return Sim.Obs.encode(state), 0, false
+    end
+end
+
+function Sim._skip_blind(state)
+    local R = E.REWARD
+    local names = {"Small","Big","Boss"}
+    local bname = state.blind_type
+    for i = 1, 3 do
+        if names[i] == bname then Sim.Blind.mark_done(state, i, true); break end
+    end
+
+    -- Track skips
+    state.skips = (state.skips or 0) + 1
+    state._blind_states = state._blind_states or {}
+    state._blind_states[bname] = "skipped"
+
+    -- Pick and add a tag
+    local tag_key = Sim.Tag.pick(state)
+    if tag_key then
+        Sim.Tag.add(state, tag_key)
+    end
+
+    -- Fire skip_blind context for jokers (Throwback, etc.)
+    if state.jokers then
+        for ji = 1, #state.jokers do
+            local jk = state.jokers[ji]
+            local def = Sim._JOKER_BY_ID[jk.id]
+            if def and def.apply then
+                local ctx = { skip_blind = true, my_joker_index = ji }
+                def.apply(ctx, state, jk)
+            end
+        end
+    end
+
+    -- Fire new_blind_choice tags
+    Sim.Tag.apply(state, "new_blind_choice")
+
+    -- Discard hand, clear state
+    for _, c in ipairs(state.hand) do state.discard[#state.discard+1] = c end
+    state.hand = {}
+    state.selection = {}
+
+    -- Advance to next blind
+    local next_btype = Sim.Blind.next_type(state)
+    if not next_btype then
+        -- Ante complete
+        state.ante = state.ante + 1
+        if state.ante > 8 then
+            state.phase = E.PHASE.WIN
+            return Sim.Obs.encode(state), R.GAME_WON, true
+        end
+        Sim.Blind.init_ante(state)
+        next_btype = Sim.Blind.next_type(state)
         Sim.Shop.generate(state)
         state.phase = E.PHASE.SHOP
         return Sim.Obs.encode(state), R.ANTE_UP, false
@@ -3478,6 +4446,51 @@ if _SIM_RUN_TESTS or ({...})[1] == "_RUN_TESTS" then
         if c.enhancement ~= 6 and c.suit ~= s then all_same = false end
     end
     test("Sigil changes all suits", all_same)
+
+    -- === Card Factory ===
+    local cf_state = Sim.State.new({ seed="CF" })
+    cf_state._uid_n = 0
+    local cf_jk = Sim.CardFactory.create("Joker", cf_state, cf_state.rng, 1)
+    test("CardFactory creates common joker", cf_jk ~= nil and cf_jk.id > 0)
+    local cf_tarot = Sim.CardFactory.create("Tarot", cf_state, cf_state.rng)
+    test("CardFactory creates tarot", cf_tarot ~= nil and cf_tarot.id > 0)
+    local cf_planet = Sim.CardFactory.create("Planet", cf_state, cf_state.rng)
+    test("CardFactory creates planet", cf_planet ~= nil and cf_planet.id > 0)
+    local cf_card = Sim.CardFactory.create("Playing Card", cf_state, cf_state.rng)
+    test("CardFactory creates playing card", cf_card ~= nil and cf_card.rank >= 2)
+    test("CardFactory rarity pools", #Sim.JOKER_RARITY_POOLS[1] > 0 and #Sim.JOKER_RARITY_POOLS[4] == 5)
+
+    -- === Tags ===
+    local tag_state = Sim.State.new({ seed="TAG", dollars=0 })
+    tag_state.tags = {}
+    tag_state.skips = 0
+    tag_state.total_hands_played = 10
+    Sim.Tag.add(tag_state, "tag_handy")
+    test("Handy Tag gives $10 (10 hands)", tag_state.dollars == 10)
+    Sim.Tag.add(tag_state, "tag_top_up")
+    test("Top-up Tag creates 2 jokers", #tag_state.jokers == 2)
+
+    -- === Vouchers ===
+    local v_state = Sim.State.new({ seed="VCH" })
+    v_state.dollars = 50
+    v_state.vouchers = {}
+    Sim.Voucher.redeem(v_state, "v_grabber")
+    test("Grabber gives +1 hand", v_state.hands == 5)
+    Sim.Voucher.redeem(v_state, "v_overstock_norm")
+    test("Overstock gives +1 shop slot", v_state.shop_joker_max == 3)
+    Sim.Voucher.redeem(v_state, "v_seed_money")
+    test("Seed Money raises interest cap", v_state._interest_cap == 50)
+    test("Voucher definitions exist", Sim.Voucher.DEFS["v_antimatter"].tier == 2)
+
+    -- === Boss Blinds ===
+    test("28 boss blinds defined", #Sim.BOSS_BLINDS == 28)
+    local b_state = Sim.State.new({ seed="BOS" })
+    local boss1 = Sim.Blind.pick_boss(b_state, 1)
+    test("Ante 1 gets regular boss", not boss1.showdown)
+    local b_state8 = Sim.State.new({ seed="BOS8" })
+    local boss8 = Sim.Blind.pick_boss(b_state8, 8)
+    test("Ante 8 gets showdown boss", boss8.showdown == true)
+    test("Violet Vessel has 3x mult", Sim.BOSS_BLINDS[26].chip_mult == 3.0)
 
     print(string.format("\n  %d/%d tests passed\n", passed, total))
 
