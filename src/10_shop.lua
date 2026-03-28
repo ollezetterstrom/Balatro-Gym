@@ -28,7 +28,7 @@ function Sim.Shop.calculate_cost(state, base_cost, edition)
         if edition == 3 then extra_cost = extra_cost + 5 end  -- Polychrome
         if edition == 4 then extra_cost = extra_cost + 5 end  -- Negative
     end
-    local discount = state._discount_percent or 0
+    local discount = state._discount or 0
     local cost = math.max(1, math.floor((base_cost + extra_cost + 0.5) * (100 - discount) / 100))
     local sell = math.max(1, math.floor(cost / 2))
     return cost, sell
@@ -88,13 +88,15 @@ end
 --- cost = round_resets_reroll_cost + reroll_cost_increase
 --- Free rerolls (Chaos the Clown) → cost = 0
 --- Each paid reroll increments increase by 1
+--- Reroll Surplus voucher: -$2, Reroll Glut: -$4
 --- Real game first reroll: base=1 + increase(0→1) = 2
 function Sim.Shop.calculate_reroll_cost(state)
     local free = state._free_rerolls or 0
     if free > 0 then return 0 end
     local base = state._temp_reroll_cost or state._base_reroll_cost or 1
     local increase = state._reroll_cost_increase or 0
-    return base + increase
+    local discount = state._reroll_discount or 0
+    return math.max(0, base + increase - discount)
 end
 
 -- ========================================================================= --

@@ -37,7 +37,7 @@ function Sim.State.new(opts)
         _planet_rate = 4,
         _spectral_rate = 0,
         _playing_card_rate = 0,
-        _discount_percent = 0,
+        _discount = 0,
         _interest_cap = 25,        -- Default 25 (interest_cap/5 = 5 units)
         _interest_amount = 1,
         _inflation = 0,
