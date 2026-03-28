@@ -2,7 +2,7 @@
 
 ## Current State (March 2026)
 
-Working headless Balatro simulation with Gymnasium wrapper. Core scoring is verified against real game (49/49 tests). Missing game systems (tags, vouchers, shop pools, most bosses) that make the strategy deep.
+Working headless Balatro simulation with Gymnasium wrapper. Core scoring and shop generation verified against real game source. 410,835 shop comparisons with 0 differences (Lua vs Python, same random stream).
 
 ### What's Done
 
@@ -12,8 +12,9 @@ Working headless Balatro simulation with Gymnasium wrapper. Core scoring is veri
 - [x] 180-float observation vector (hand, jokers, deck composition, blind state, boss info)
 - [x] 6-type hierarchical action space
 - [x] 49/49 scoring validation tests (known-answer, against real game values)
-- [x] 45/45 self-tests
+- [x] 60/60 self-tests
 - [x] 1019/1019 cross-validation vs real game source
+- [x] 410,835/410,835 shop verification (Lua vs Python, 0 diffs)
 
 **Jokers (145 registered, ~100 with working behavior):**
 - [x] Joker (+4), Greedy/Lusty/Wrathful/Gluttonous (+3 suit), Jolly/Zany/Mad/Crazy/Droll (+mult type), Sly/Wily/Clever/Devious/Crafty (+chips type)
@@ -48,6 +49,21 @@ Working headless Balatro simulation with Gymnasium wrapper. Core scoring is veri
 - [x] 4 editions (Foil +50, Holographic +10, Polychrome ×1.5, Negative +1 slot)
 - [x] 4 seals (Red re-trigger, Gold +$3, Blue planet, Purple tarot)
 
+**Shop & Economy (verified against real game source, 0 diffs in 410K comparisons):**
+- [x] Weighted card type selection: Joker 71.4%, Tarot 14.3%, Planet 14.3%
+- [x] Joker rarity rolls: 70% common, 25% uncommon, 5% rare
+- [x] Edition rolls: exact cumulative thresholds (neg >0.997, poly >0.994, holo >0.98, foil >0.96)
+- [x] Pricing: `max(1, floor((base + extra + 0.5) × (100 - disc) / 100))` with edition markups
+- [x] Sell cost: `max(1, floor(cost/2)) + extra_value`
+- [x] Reroll: base=1 + increment, free reroll support
+- [x] Interest: `min(floor($/5), cap/5)`, default cap=25
+- [x] Sticker system: eternal (30%), perishable (30%), rental (30%)
+- [x] Soul/Black Hole: 0.3% chance each (correct type gating)
+- [x] Inflation modifier: +1 per purchase
+- [x] Booster packs: first shop Buffoon, weighted selection, mega=2 picks
+- [x] Pool culling: removes owned jokers (Showman bypass), excludes Soul/BH
+- [x] CardFactory.create() with full pipeline: rarity → pool → edition → stickers
+
 **Infrastructure:**
 - [x] Python Gymnasium wrapper (full 293-action + simplified 247-action)
 - [x] pip install via pyproject.toml
@@ -58,13 +74,27 @@ Working headless Balatro simulation with Gymnasium wrapper. Core scoring is veri
 
 ---
 
-## Phase 2: Card Creation System (NEXT)
+## Phase 2: Card Creation System ✅ DONE
 
-**Goal:** Build the foundation that tags, vouchers, more bosses, and stub jokers all depend on.
+**Status:** Verified against real game source. 410,835 comparisons, 0 differences.
 
-### 2a. `create_card()` helper (in `src/14_cards_factory.lua`)
+### `Sim.CardFactory.create(card_type, state, rng, opts)`
 
-Need a function that creates cards with proper pools, matching the real game's `create_card()` in `functions/common_events.lua`.
+In `src/14_card_factory.lua`. Full pipeline: rarity → pool culling → edition → stickers.
+
+**Card types:** Joker (rarity-weighted pool), Tarot (21), Planet (12), Spectral (16), Playing Card (52)
+
+**Rarity:** 70% common, 25% uncommon, 5% rare (legendary only via Soul)
+
+**Edition:** cumulative thresholds — neg 0.3%, poly 0.3%, holo 1.4%, foil 2.0%
+
+**Stickers:** eternal 30%, perishable 30%, rental 30% (independent)
+
+**Soul/Black Hole:** 0.3% each, correct type gating
+
+**Pool culling:** removes owned jokers (Showman bypass), excludes Soul/BH
+
+Stub jokers needing card creation (Marble, Riff-raff, Cartomancer, Certificate, DNA, Seance, Superposition, Hallucination) can now be implemented.
 
 ```
 Sim.create_card(card_type, area, rarity, rng, key_append)
@@ -135,66 +165,46 @@ Once `create_card` exists, these jokers become straightforward:
 
 ---
 
-## Phase 3: Shop Pool System (NEXT)
+## Phase 3: Shop Pool System ✅ DONE
 
-**Goal:** Make the shop generate items with correct weighted probabilities and pool culling.
+**Status:** Verified against real game source. 410,835 comparisons, 0 differences.
 
-### Current shop (wrong):
-- Fixed 2 jokers, 1 booster, 1 consumable
-- No pool weighting
-- No item removal from pool
+All shop logic in `src/10_shop.lua` now matches the real game exactly.
 
-### Real shop (from `game.lua` and `UI_definitions.lua`):
-
-**Shop slots:**
-- Jokers: `G.GAME.shop.joker_max` = 2 (base), modified by Overstock (+1), Overstock Plus (+2)
-- Vouchers: 1 slot (always)
-- Boosters: 2 slots
-- Consumable: 1 slot (from tarot/planet pool)
+### What's implemented:
 
 **Card type selection (weighted random):**
-```
-joker_rate = 20      -- 71.4% chance
-tarot_rate = 4       -- 14.3% chance
-planet_rate = 4      -- 14.3% chance
-spectral_rate = 0    -- 0% by default (increased by vouchers)
-playing_card_rate = 0 -- 0% by default (increased by Magic Trick voucher)
-```
+- Joker: 20/28 = 71.4%
+- Tarot: 4/28 = 14.3%
+- Planet: 4/28 = 14.3%
+- Playing Card: 0/28 (enabled by Magic Trick voucher)
+- Spectral: 0/28 (enabled by Spectral rate vouchers/decks)
 
-**Pricing (from `card.lua` set_cost):**
-- Base cost defined per card in P_CENTERS (e.g., Joker = $2, Rare = $8-10)
-- All vouchers = $10
-- Boosters: Normal = $4, Jumbo = $6, Mega = $8
-- Discounts: Clearance Sale = 25% off, Liquidation = 50% off
-- `couponed = true` → cost = $0
-- Egg adds +$3 to sell value per round
-- Gift Card adds +$1 to sell value of all jokers/consumables per round
+**Pricing (exact `Card:set_cost` formula):**
+- `cost = max(1, floor((base + extra + 0.5) × (100 - discount) / 100))`
+- `extra = inflation + edition_markup` (foil +2, holo +3, poly/neg +5)
+- Sell: `max(1, floor(cost/2)) + extra_value`
 
-**Edition roll (from `common_events.lua`):**
-- Normal (modified by edition_rate, default 1):
-  - Foil: 4% * edition_rate
-  - Holographic: 2% * edition_rate
-  - Polychrome: 0.6% * edition_rate
-  - Negative: 0.3% * edition_rate
-- With Hone voucher: edition_rate = 2
-- With Glow Up voucher: edition_rate = 4
+**Edition roll (CORRECTED — cumulative thresholds, not independent):**
+- `p > 0.997` → Negative (0.3%)
+- `p > 0.994` → Polychrome (0.3% marginal, NOT 0.6%)
+- `p > 0.98` → Holographic (1.4% marginal, NOT 2.0%)
+- `p > 0.96` → Foil (2.0% marginal, NOT 4.0%)
+- No edition: 96.0% (NOT 93.1%)
 
-**Reroll cost:**
-- Base: $5
-- Each reroll: +$1
-- Reroll Surplus: -$2
-- Reroll Glut: -$4 total
-- D6 Tag: first reroll free
+**Reroll cost (CORRECTED):**
+- Base: 1 (NOT 5 — `base_reroll_cost = 5` is unused)
+- Each reroll: +1 to increase counter
+- Cost = base + increase (first reroll = 2, second = 3, ...)
+- Free rerolls (Chaos the Clown): cost = 0, no increment
 
-### Implementation in `src/10_shop.lua`:
+**Interest:**
+- `interest = min(floor($/5), cap/5)` where cap defaults to 25
 
-Add `Sim.Shop.generate(state)`:
-1. Roll card type (weighted by joker_rate/tarot_rate/planet_rate/spectral_rate)
-2. If Joker: call `create_card("Joker", area, rarity, rng)` with pool culling
-3. If Tarot/Planet: call `create_card(type, area, nil, rng)`
-4. Roll edition (if joker, based on edition_rate)
-5. Calculate cost (base - discount)
-6. Place in shop slot
+**Booster packs:**
+- First shop always gives Buffoon Pack
+- Weighted random selection from pack pool after
+- Mega packs give 2 picks
 
 ---
 
@@ -482,22 +492,23 @@ state._illusion = false       -- enhanced/editioned playing cards
 ## Implementation Order (Dependency Graph)
 
 ```
-Phase 2 (create_card) ─────────────────┐
-                                        ├─→ Phase 7 (stub jokers)
-Phase 3 (shop pools) ──→ Phase 4 (tags)─┤
-        │                               │
-        ├─→ Phase 5 (vouchers) ─────────┤
-        │                               │
-Phase 6 (boss blinds) ──────────────────┘
+✅ Phase 2 (create_card) ─────────────────┐
+                                          ├─→ Phase 7 (stub jokers)
+✅ Phase 3 (shop pools) ──→ Phase 4 (tags)┤
+          │                               │
+          ├─→ Phase 5 (vouchers) ─────────┤
+          │                               │
+Phase 6 (boss blinds) ────────────────────┘
 ```
 
-Phase 2 and 3 can be worked on in parallel. Phase 4 depends on 2+3. Phase 5 depends on 3. Phase 7 depends on everything above.
+Phase 2 ✅ and Phase 3 ✅ are done. Phase 4 (tags) and Phase 5 (vouchers) are next — both depend on the shop/create_card system which is now complete. Phase 7 (stub jokers) depends on Phases 2+3 ✅, 4, 5, 6.
 
 ## Verification
 
 After each phase:
 1. `lua validate.lua` — must pass 49/49 (existing scoring not broken)
-2. `lua -e "_SIM_RUN_TESTS=true" balatro_sim.lua` — must pass 45/45
+2. `lua -e "_SIM_RUN_TESTS=true" balatro_sim.lua` — must pass 60/60
 3. Add new tests for the new system
 4. Run a full random agent ante and verify no crashes
 5. Spot-check 3+ items against real game source
+6. For shop logic: `lua balatro_lua_sim.lua > lua_output.jsonl && python balatro_compare.py` (410K comparisons)

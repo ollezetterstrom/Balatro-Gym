@@ -27,10 +27,11 @@ python3 train.py               # train PPO, then compare vs random
 | Test suite | Tests | Result | Requires |
 |-----------|-------|--------|----------|
 | `validate.lua` | 49 known-answer scoring tests | 49/49 | — |
-| Self-tests | Joker effects, consumables, env integration | 45/45 | — |
+| Self-tests | Joker effects, consumables, env integration | 60/60 | — |
 | `cross_validate.lua` | 1019 hand evaluations vs real Balatro source | 1019/1019 | game files¹ |
+| Shop verification | 410,835 Lua vs Python comparisons (same random stream) | 0 diffs | — |
 
-Every poker hand type is evaluated identically to Balatro's actual engine. Every scoring calculation matches known game values. All joker data (names, costs, rarity) extracted from the real game's `game.lua`.
+Every poker hand type is evaluated identically to Balatro's actual engine. Every scoring calculation matches known game values. All joker data (names, costs, rarity) extracted from the real game's `game.lua`. Shop generation (card type selection, pricing, edition rolls, sticker rolls, reroll cost, interest) verified against real Lua source with identical output.
 
 ¹ `cross_validate.lua` requires a local copy of `functions/misc_functions.lua` from the Balatro game (not included in this repo). Point it at your game install with `cross_validate.lua /path/to/Balatro/functions`.
 
@@ -124,8 +125,13 @@ Red (re-trigger), Gold (+$3 on score), Blue (create planet at round end), Purple
 ### Game systems
 - Blinds: Small → Big → Boss, ante 1–8
 - Economy: blind rewards, interest, joker selling
-- Shop: 2 jokers + booster + consumable
-- Packs: nested phase, 3 joker choices
+- Shop: weighted card type selection (71% Joker, 14% Tarot, 14% Planet), 2 joker slots + 2 boosters + 1 voucher
+- Pricing: exact formula with edition markups (foil +2, holo +3, poly/neg +5), discounts, inflation
+- Editions: rolled per card (0.3% neg, 0.3% poly, 1.4% holo, 2.0% foil)
+- Stickers: eternal/perishable/rental for stake support
+- Reroll: base=1 + incrementing cost, free reroll support
+- Interest: min(floor($/5), cap/5) earned at round end
+- Packs: nested phase, weighted pack selection, first shop always Buffoon
 - Deck management: draw, discard, rebuild
 - Context hooks: setting_blind, selling_card, open_booster, ending_shop
 
