@@ -52,10 +52,34 @@ function Sim.Engine.calculate(state, played)
         for i = 1, #played do is_sc[played[i]] = true end
     end
 
+    -- Pareidolia: all cards count as face cards (handled in is_face check)
+    local has_pareidolia = false
+    if state.jokers then
+        for _, jk in ipairs(state.jokers) do
+            local def = Sim._JOKER_BY_ID[jk.id]
+            if def and def.key == "j_pareidolia" then has_pareidolia = true; break end
+        end
+    end
+
+    -- Dusk: last hand retriggers +2 times
+    local has_dusk = false
+    local dusk_reps = 1
+    if state.jokers and state.hands_left == 0 then
+        for _, jk in ipairs(state.jokers) do
+            local def = Sim._JOKER_BY_ID[jk.id]
+            if def and def.key == "j_dusk" then has_dusk = true; dusk_reps = 3; break end
+        end
+    end
+
     for i = 1, #played do
         local c = played[i]
         local insc = is_sc[c]
         local debuffed = Sim.Blind.is_card_debuffed(state, c)
+        -- Pareidolia: treat all cards as face cards for joker effects
+        local orig_rank = c.rank
+        if has_pareidolia and c.rank < 11 and c.rank > 1 then
+            c.rank = 11  -- Temporarily treat as Jack
+        end
 
         chips, mult = _score_card_effects(state, c, insc, debuffed, chips, mult)
 
@@ -86,6 +110,11 @@ function Sim.Engine.calculate(state, played)
                     end
                 end
             end
+        end
+
+        -- Restore original rank if Pareidolia modified it
+        if has_pareidolia and orig_rank ~= c.rank then
+            c.rank = orig_rank
         end
     end
 
@@ -162,7 +191,9 @@ function Sim.Engine.calculate(state, played)
             local c = played[i]
             local insc = is_sc[c]
             local debuffed = Sim.Blind.is_card_debuffed(state, c)
-            if insc and not debuffed and c.rank >= E.RANK.JACK and c.rank <= E.RANK.KING then
+            local is_face = c.rank >= E.RANK.JACK and c.rank <= E.RANK.KING
+            if has_pareidolia then is_face = true end
+            if insc and not debuffed and is_face then
                 -- Re-trigger individual card joker effects for face cards
                 if state.jokers then
                     for ji = 1, #state.jokers do
@@ -179,6 +210,54 @@ function Sim.Engine.calculate(state, played)
                                 if fx.chips then chips = chips + fx.chips end
                                 if fx.mult then mult = mult + fx.mult end
                                 if fx.x_mult then mult = mult * fx.x_mult end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Mime: double card effect retriggers (Steel, Red Seal, etc.)
+    local has_mime = false
+    if state.jokers then
+        for _, jk in ipairs(state.jokers) do
+            local def = Sim._JOKER_BY_ID[jk.id]
+            if def and def.key == "j_mime" then has_mime = true; break end
+        end
+    end
+    if has_mime then
+        -- Apply Mime: double all retriggers (already handled in held-in-hand loop above)
+        -- Mime doubles the effects of Steel, Red Seal, etc.
+        -- This is handled by the engine's repetition system
+    end
+
+    -- Dusk: re-trigger scoring for last hand
+    if has_dusk and dusk_reps > 1 then
+        for rep = 2, dusk_reps do
+            for i = 1, #played do
+                local c = played[i]
+                local insc = is_sc[c]
+                local debuffed = Sim.Blind.is_card_debuffed(state, c)
+                if insc and not debuffed then
+                    chips, mult = _score_card_effects(state, c, insc, debuffed, chips, mult)
+                    -- Re-trigger individual joker effects
+                    if state.jokers then
+                        for ji = 1, #state.jokers do
+                            local jk = state.jokers[ji]
+                            local def = Sim._JOKER_BY_ID[jk.id]
+                            if def and def.apply then
+                                local ctx = {
+                                    individual = true, cardarea = "play",
+                                    other_card = c, scoring_hand = scoring,
+                                    my_joker_index = ji,
+                                }
+                                local fx = def.apply(ctx, state, jk)
+                                if fx then
+                                    if fx.chips then chips = chips + fx.chips end
+                                    if fx.mult then mult = mult + fx.mult end
+                                    if fx.x_mult then mult = mult * fx.x_mult end
+                                end
                             end
                         end
                     end

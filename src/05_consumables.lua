@@ -154,7 +154,7 @@ Sim._reg_cons("c_emperor", "The Emperor", "Tarot", function(ctx, state)
     return { created = created }
 end)
 
-Sim._reg_cons("c_hierophant", "The Hierophant", "Tarot", function(ctx, state)
+Sim._reg_cons("c_heirophant", "The Hierophant", "Tarot", function(ctx, state)
     if not ctx.selected or #ctx.selected == 0 then return nil end
     local count = 0
     for _, idx in ipairs(ctx.selected) do
@@ -208,7 +208,7 @@ Sim._reg_cons("c_hermit", "The Hermit", "Tarot", function(ctx, state)
     return { money = bonus }
 end)
 
-Sim._reg_cons("c_wheel_of_fortune", "Wheel of Fortune", "Tarot", function(ctx, state)
+Sim._reg_cons("c_wheel_of_fortune", "The Wheel of Fortune", "Tarot", function(ctx, state)
     if not state.jokers or #state.jokers == 0 then return nil end
     if Sim.RNG.next(state.rng) >= 0.25 then return nil end
     local ji = Sim.RNG.int(state.rng, 1, #state.jokers)
@@ -590,6 +590,42 @@ Sim._reg_cons("c_cryptid", "Cryptid", "Spectral", function(ctx, state)
         end
     end
     return { created = created }
+end)
+
+
+Sim._reg_cons("c_judgement", "Judgement", "Tarot", function(ctx, state)
+    -- Create 1 random Joker
+    if #state.jokers >= state.joker_slots then return nil end
+    local jid = Sim.RNG.pick(state.rng, Sim.JOKER_POOL)
+    state._joker_n = (state._joker_n or 0) + 1
+    state.jokers[#state.jokers+1] = {
+        id = jid, edition = 0, eternal = false, uid = state._joker_n,
+    }
+    return { created = true }
+end)
+
+Sim._reg_cons("c_soul", "The Soul", "Spectral", function(ctx, state)
+    -- Create 1 random Legendary Joker
+    local leg_pool = {}
+    for _, def in pairs(Sim.JOKER_DEFS) do
+        if def.rarity == 4 then leg_pool[#leg_pool+1] = def.id end
+    end
+    if #leg_pool == 0 then return nil end
+    if #state.jokers >= state.joker_slots then return nil end
+    local jid = Sim.RNG.pick(state.rng, leg_pool)
+    state._joker_n = (state._joker_n or 0) + 1
+    state.jokers[#state.jokers+1] = {
+        id = jid, edition = 0, eternal = false, uid = state._joker_n,
+    }
+    return { created = true }
+end)
+
+Sim._reg_cons("c_black_hole", "Black Hole", "Spectral", function(ctx, state)
+    -- Level up all hand types
+    for ht = 1, 12 do
+        Sim.State.level_up(state, ht, 1)
+    end
+    return { leveled_all = true }
 end)
 
 Sim.CONS_POOL = {}

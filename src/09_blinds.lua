@@ -4,45 +4,44 @@ Sim.Blind = {}
 local BLIND_DATA = {
     {name="Small", mult=1.0, reward=3},
     {name="Big",   mult=1.5, reward=4},
-    {name="Boss",  mult=2.0, reward=5},
 }
 
 local SUIT = Sim.ENUMS.SUIT
 
 Sim.BOSS_BLINDS = {
     -- Regular bosses (23) — behaviors match blind.lua exactly
-    { name = "The Club",       chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.CLUBS end },
-    { name = "The Goad",       chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.SPADES end },
-    { name = "The Head",       chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.HEARTS end },
-    { name = "The Window",     chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.DIAMONDS end },
-    { name = "The Psychic",    chip_mult = 1.0, min_ante = 1, setup = function(st) st._boss_h_size_ge = 5 end },
-    { name = "The Hook",       chip_mult = 1.0, min_ante = 1, setup = function(st) end },
-    { name = "The Manacle",    chip_mult = 1.0, min_ante = 1, setup = function(st) st.hand_limit = st.hand_limit - 1 end },
-    { name = "The Water",      chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_discards_removed = st.discards_left; st.discards_left = 0 end },
-    { name = "The Wall",       chip_mult = 2.0, min_ante = 2, setup = function(st) end },
-    { name = "The House",      chip_mult = 1.0, min_ante = 2, setup = function(st) end },
-    { name = "The Arm",        chip_mult = 1.0, min_ante = 2, setup = function(st) end },
-    { name = "The Wheel",      chip_mult = 1.0, min_ante = 2, setup = function(st) end },
-    { name = "The Fish",       chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_fish_prepped = false end },
-    { name = "The Mouth",      chip_mult = 1.0, min_ante = 2, setup = function(st) st._boss_only_hand = false end },
-    { name = "The Mark",       chip_mult = 1.0, min_ante = 2, setup = function(st) end },
-    { name = "The Tooth",      chip_mult = 1.0, min_ante = 3, setup = function(st) end },
-    { name = "The Eye",        chip_mult = 1.0, min_ante = 3, setup = function(st) st._boss_hands_played = {} end },
-    { name = "The Plant",      chip_mult = 1.0, min_ante = 4, setup = function(st) st._boss_debuff_faces = true end },
-    { name = "The Needle",     chip_mult = 0.5, min_ante = 2, setup = function(st) st.hands_left = 1 end },
-    { name = "The Pillar",     chip_mult = 1.0, min_ante = 1, setup = function(st) end },
-    { name = "The Serpent",    chip_mult = 1.0, min_ante = 5, setup = function(st) end },
-    { name = "The Ox",         chip_mult = 1.0, min_ante = 6, setup = function(st) end },
-    { name = "The Flint",      chip_mult = 1.0, min_ante = 2, setup = function(st) end },
+    { name = "The Club",       chip_mult = 2.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.CLUBS end },
+    { name = "The Goad",       chip_mult = 2.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.SPADES end },
+    { name = "The Head",       chip_mult = 2.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.HEARTS end },
+    { name = "The Window",     chip_mult = 2.0, min_ante = 1, setup = function(st) st._boss_debuff_suit = SUIT.DIAMONDS end },
+    { name = "The Psychic",    chip_mult = 2.0, min_ante = 1, setup = function(st) st._boss_h_size_ge = 5 end },
+    { name = "The Hook",       chip_mult = 2.0, min_ante = 1, setup = function(st) end },
+    { name = "The Manacle",    chip_mult = 2.0, min_ante = 1, setup = function(st) st.hand_limit = st.hand_limit - 1 end },
+    { name = "The Water",      chip_mult = 2.0, min_ante = 2, setup = function(st) st._boss_discards_removed = st.discards_left; st.discards_left = 0 end },
+    { name = "The Wall",       chip_mult = 4.0, min_ante = 2, setup = function(st) end },
+    { name = "The House",      chip_mult = 2.0, min_ante = 2, setup = function(st) end },
+    { name = "The Arm",        chip_mult = 2.0, min_ante = 2, setup = function(st) end },
+    { name = "The Wheel",      chip_mult = 2.0, min_ante = 2, setup = function(st) end },
+    { name = "The Fish",       chip_mult = 2.0, min_ante = 2, setup = function(st) st._boss_fish_prepped = false end },
+    { name = "The Mouth",      chip_mult = 2.0, min_ante = 2, setup = function(st) st._boss_only_hand = false end },
+    { name = "The Mark",       chip_mult = 2.0, min_ante = 2, setup = function(st) end },
+    { name = "The Tooth",      chip_mult = 2.0, min_ante = 3, setup = function(st) end },
+    { name = "The Eye",        chip_mult = 2.0, min_ante = 3, setup = function(st) st._boss_hands_played = {} end },
+    { name = "The Plant",      chip_mult = 2.0, min_ante = 4, setup = function(st) st._boss_debuff_faces = true end },
+    { name = "The Needle",     chip_mult = 1.0, min_ante = 2, setup = function(st) st.hands_left = 1 end },
+    { name = "The Pillar",     chip_mult = 2.0, min_ante = 1, setup = function(st) end },
+    { name = "The Serpent",    chip_mult = 2.0, min_ante = 5, setup = function(st) end },
+    { name = "The Ox",         chip_mult = 2.0, min_ante = 6, setup = function(st) end },
+    { name = "The Flint",      chip_mult = 2.0, min_ante = 2, setup = function(st) end },
     -- Showdown bosses (ante 8 only, 5)
-    { name = "Cerulean Bell",  chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) end },
-    { name = "Verdant Leaf",   chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) st._boss_debuff_all = true end },
-    { name = "Violet Vessel",  chip_mult = 3.0, min_ante = 8, showdown = true, setup = function(st) end },
-    { name = "Amber Acorn",    chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st)
+    { name = "Cerulean Bell",  chip_mult = 2.0, min_ante = 8, showdown = true, setup = function(st) end },
+    { name = "Verdant Leaf",   chip_mult = 2.0, min_ante = 8, showdown = true, setup = function(st) st._boss_debuff_all = true end },
+    { name = "Violet Vessel",  chip_mult = 6.0, min_ante = 8, showdown = true, setup = function(st) end },
+    { name = "Amber Acorn",    chip_mult = 2.0, min_ante = 8, showdown = true, setup = function(st)
         -- Shuffle jokers (from real game set_blind)
         Sim.RNG.shuffle(st.rng, st.jokers)
     end },
-    { name = "Crimson Heart",  chip_mult = 1.0, min_ante = 8, showdown = true, setup = function(st) end },
+    { name = "Crimson Heart",  chip_mult = 2.0, min_ante = 8, showdown = true, setup = function(st) end },
 }
 
 function Sim.Blind.pick_boss(state, ante)

@@ -19,7 +19,7 @@ function Sim._reg_joker(key, name, rarity, cost, apply_fn)
     return def
 end
 
-Sim._reg_joker("j_joker", "Joker", 1, 3, function(ctx, st, jk)
+Sim._reg_joker("j_joker", "Joker", 1, 2, function(ctx, st, jk)
     if ctx.joker_main then return { mult_mod = 4 } end
 end)
 
@@ -29,56 +29,70 @@ local function _is_suit(card, target_suit)
     return card.suit == target_suit or card.enhancement == E.ENHANCEMENT.WILD
 end
 
-Sim._reg_joker("j_greedy", "Greedy Joker", 1, 5, function(ctx, st, jk)
+Sim._reg_joker("j_greedy_joker", "Greedy Joker", 1, 5, function(ctx, st, jk)
     if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
         if _is_suit(ctx.other_card, E.SUIT.DIAMONDS) then return { mult = 3 } end
     end
 end)
 
-Sim._reg_joker("j_lusty", "Lusty Joker", 1, 5, function(ctx, st, jk)
+Sim._reg_joker("j_lusty_joker", "Lusty Joker", 1, 5, function(ctx, st, jk)
     if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
         if _is_suit(ctx.other_card, E.SUIT.HEARTS) then return { mult = 3 } end
     end
 end)
 
-Sim._reg_joker("j_wrathful", "Wrathful Joker", 1, 5, function(ctx, st, jk)
+Sim._reg_joker("j_wrathful_joker", "Wrathful Joker", 1, 5, function(ctx, st, jk)
     if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
         if _is_suit(ctx.other_card, E.SUIT.SPADES) then return { mult = 3 } end
     end
 end)
 
-Sim._reg_joker("j_gluttonous", "Gluttonous Joker", 1, 5, function(ctx, st, jk)
+Sim._reg_joker("j_gluttenous_joker", "Gluttonous Joker", 1, 5, function(ctx, st, jk)
     if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
         if _is_suit(ctx.other_card, E.SUIT.CLUBS) then return { mult = 3 } end
     end
 end)
 
-Sim._reg_joker("j_the_duo", "The Duo", 3, 8, function(ctx, st, jk)
+Sim._reg_joker("j_duo", "The Duo", 3, 8, function(ctx, st, jk)
     if ctx.joker_main and ctx.all_hands and ctx.all_hands[11] then
         return { Xmult_mod = 2 }
     end
 end)
 
-Sim._reg_joker("j_the_trio", "The Trio", 3, 8, function(ctx, st, jk)
+Sim._reg_joker("j_trio", "The Trio", 3, 8, function(ctx, st, jk)
     if ctx.joker_main and ctx.all_hands and ctx.all_hands[9] then
         return { Xmult_mod = 3 }
     end
 end)
 
 Sim._reg_joker("j_blueprint", "Blueprint", 3, 10, function(ctx, st, jk)
+    -- Blueprint copies the FIRST joker in the list (real game behavior)
     if ctx.blueprint then return end
     if not ctx.my_joker_index then return end
-    local target = st.jokers[ctx.my_joker_index + 1]
-    if not target or target == jk then return end
-    local def = Sim._JOKER_BY_ID[target.id]
+    local first = st.jokers[1]
+    if not first or first == jk then return end
+    local def = Sim._JOKER_BY_ID[first.id]
     if not def or not def.apply then return end
     local cc = {}
     for k,v in pairs(ctx) do cc[k] = v end
     cc.blueprint = true
-    return def.apply(cc, st, target)
+    return def.apply(cc, st, first)
 end)
 
-Sim._reg_joker("j_burnt_joker", "Burnt Joker", 3, 8, function(ctx, st, jk)
+Sim._reg_joker("j_brainstorm", "Brainstorm", 4, 20, function(ctx, st, jk)
+    if ctx.blueprint then return end
+    if not ctx.my_joker_index then return end
+    local first = st.jokers[1]
+    if not first or first == jk then return end
+    local def = Sim._JOKER_BY_ID[first.id]
+    if not def or not def.apply then return end
+    local cc = {}
+    for k,v in pairs(ctx) do cc[k] = v end
+    cc.blueprint = true
+    return def.apply(cc, st, first)
+end)
+
+Sim._reg_joker("j_burnt", "Burnt Joker", 3, 8, function(ctx, st, jk)
     if ctx.on_discard and ctx.is_first_discard then
         return { level_up = ctx.discarded_hand_type }
     end
@@ -129,7 +143,7 @@ Sim._reg_joker("j_scary_face", "Scary Face", 1, 4, function(ctx, st, jk)
     end
 end)
 
-Sim._reg_joker("j_even_steven", "Even Steven", 1, 5, function(ctx, st, jk)
+Sim._reg_joker("j_even_steven", "Even Steven", 1, 4, function(ctx, st, jk)
     if ctx.individual and ctx.other_card then
         local r = ctx.other_card.rank
         if r == 2 or r == 4 or r == 6 or r == 8 or r == 10 then
@@ -138,7 +152,7 @@ Sim._reg_joker("j_even_steven", "Even Steven", 1, 5, function(ctx, st, jk)
     end
 end)
 
-Sim._reg_joker("j_odd_todd", "Odd Todd", 1, 5, function(ctx, st, jk)
+Sim._reg_joker("j_odd_todd", "Odd Todd", 1, 4, function(ctx, st, jk)
     if ctx.individual and ctx.other_card then
         local r = ctx.other_card.rank
         if r == 3 or r == 5 or r == 7 or r == 9 or r == E.RANK.ACE then
@@ -163,7 +177,7 @@ end)
 
 -- === New jokers (7 uncommon/rare) ===
 
-Sim._reg_joker("j_delayed_gratification", "Delayed Gratification", 1, 4, function(ctx, st, jk)
+Sim._reg_joker("j_delayed_grat", "Delayed Gratification", 1, 4, function(ctx, st, jk)
     if ctx.round_end then
         -- Only if no discards were used this round
         local total_discards = Sim.DEFAULTS.discards
@@ -180,7 +194,7 @@ Sim._reg_joker("j_supernova", "Supernova", 1, 5, function(ctx, st, jk)
     end
 end)
 
-Sim._reg_joker("j_ride_the_bus", "Ride the Bus", 1, 5, function(ctx, st, jk)
+Sim._reg_joker("j_ride_the_bus", "Ride the Bus", 1, 6, function(ctx, st, jk)
     if ctx.joker_main then
         if st.ride_the_bus and st.ride_the_bus > 0 then
             return { mult_mod = st.ride_the_bus }
@@ -262,19 +276,19 @@ end)
 
 -- === Xmult for hand type ===
 
-Sim._reg_joker("j_the_family", "The Family", 3, 8, function(ctx, st, jk)
+Sim._reg_joker("j_family", "The Family", 3, 8, function(ctx, st, jk)
     if ctx.joker_main and ctx.all_hands and ctx.all_hands[E.HAND_TYPE.FOUR_OF_A_KIND] then return { Xmult_mod = 4 } end
 end)
-Sim._reg_joker("j_the_order", "The Order", 3, 8, function(ctx, st, jk)
+Sim._reg_joker("j_order", "The Order", 3, 8, function(ctx, st, jk)
     if ctx.joker_main and ctx.all_hands and ctx.all_hands[E.HAND_TYPE.STRAIGHT] then return { Xmult_mod = 3 } end
 end)
-Sim._reg_joker("j_the_tribe", "The Tribe", 3, 8, function(ctx, st, jk)
+Sim._reg_joker("j_tribe", "The Tribe", 3, 8, function(ctx, st, jk)
     if ctx.joker_main and ctx.all_hands and ctx.all_hands[E.HAND_TYPE.FLUSH] then return { Xmult_mod = 2 } end
 end)
 
 -- === Simple scoring jokers ===
 
-Sim._reg_joker("j_half_joker", "Half Joker", 1, 5, function(ctx, st, jk)
+Sim._reg_joker("j_half", "Half Joker", 1, 5, function(ctx, st, jk)
     if ctx.joker_main and #st.hand <= 3 then return { mult_mod = 20 } end
 end)
 Sim._reg_joker("j_juggler", "Juggler", 1, 4, function(ctx, st, jk)
@@ -326,13 +340,15 @@ Sim._reg_joker("j_golden", "Golden Joker", 1, 6, function(ctx, st, jk)
     if ctx.round_end then return { dollars = 4 } end
 end)
 Sim._reg_joker("j_credit_card", "Credit Card", 1, 1, function(ctx, st, jk)
-    -- -$20 debt limit (passive)
+    -- Passive: allows debt down to -$20 (handled in interest/money calc)
 end)
 Sim._reg_joker("j_chaos", "Chaos the Clown", 1, 4, function(ctx, st, jk)
-    -- Free reroll per shop (passive)
+    if ctx.shop_start then
+        st._free_rerolls = (st._free_rerolls or 0) + 1
+    end
 end)
 Sim._reg_joker("j_egg", "Egg", 1, 4, function(ctx, st, jk)
-    -- +3 sell value per round (passive)
+    if ctx.round_end then jk._egg_bonus = (jk._egg_bonus or 0) + 3 end
 end)
 Sim._reg_joker("j_faceless", "Faceless Joker", 1, 4, function(ctx, st, jk)
     if ctx.round_end and st.discard then
@@ -394,7 +410,14 @@ Sim._reg_joker("j_mime", "Mime", 2, 5, function(ctx, st, jk)
     -- Re-trigger held-in-hand effects (handled in engine)
 end)
 Sim._reg_joker("j_marble", "Marble Joker", 2, 6, function(ctx, st, jk)
-    -- Add Stone card to deck on blind start (complex)
+    if ctx.setting_blind then
+        local rank = Sim.RNG.int(st.rng, 2, 14)
+        local suit = Sim.RNG.int(st.rng, 1, 4)
+        local uid = (st._uid_n or 0) + 1; st._uid_n = uid
+        local stone = Sim.Card.new(rank, suit, E.ENHANCEMENT.STONE, 0, 0, uid)
+        st.deck[#st.deck + 1] = stone
+        st.deck_count = (st.deck_count or 52) + 1
+    end
 end)
 Sim._reg_joker("j_loyalty_card", "Loyalty Card", 2, 5, function(ctx, st, jk)
     if ctx.joker_main then
@@ -449,6 +472,51 @@ Sim._reg_joker("j_space", "Space Joker", 2, 5, function(ctx, st, jk)
     if ctx.after_play then
         if Sim.RNG.next(st.rng) < 0.25 then return { level_up = ctx.hand_type } end
     end
+end)
+Sim._reg_joker("j_ceremonial", "Ceremonial Dagger", 2, 6, function(ctx, st, jk)
+    if ctx.setting_blind and #st.jokers > 1 then
+        local my_pos = nil
+        for i = 1, #st.jokers do
+            if st.jokers[i] == jk then my_pos = i; break end
+        end
+        if my_pos and st.jokers[my_pos + 1] then
+            local sliced = st.jokers[my_pos + 1]
+            local def = Sim._JOKER_BY_ID[sliced.id]
+            if def then
+                jk._ceremonial_mult = (jk._ceremonial_mult or 0) + def.cost * 2
+            end
+            table.remove(st.jokers, my_pos + 1)
+        end
+    end
+    if ctx.joker_main then return { mult_mod = jk._ceremonial_mult or 0 } end
+end)
+Sim._reg_joker("j_sixth_sense", "Sixth Sense", 2, 6, function(ctx, st, jk)
+    if ctx.cards_destroyed and ctx.first_card_is_6 then
+        return { create_spectral = true }
+    end
+end)
+Sim._reg_joker("j_hiker", "Hiker", 2, 5, function(ctx, st, jk)
+    if ctx.after_play then
+        for _, c in ipairs(ctx.scoring or {}) do
+            c.perma_bonus = (c.perma_bonus or 0) + 5
+        end
+    end
+end)
+Sim._reg_joker("j_madness", "Madness", 2, 7, function(ctx, st, jk)
+    if ctx.setting_blind and not st.boss_name then
+        jk._madness_x = (jk._madness_x or 1) + 0.5
+        if #st.jokers > 1 then
+            local others = {}
+            for i, j in ipairs(st.jokers) do
+                if j ~= jk then others[#others + 1] = i end
+            end
+            if #others > 0 then
+                local idx = others[Sim.RNG.int(st.rng, 1, #others)]
+                table.remove(st.jokers, idx)
+            end
+        end
+    end
+    if ctx.joker_main then return { Xmult_mod = jk._madness_x or 1 } end
 end)
 Sim._reg_joker("j_burglar", "Burglar", 2, 6, function(ctx, st, jk)
     if ctx.setting_blind then
@@ -517,6 +585,11 @@ Sim._reg_joker("j_baron", "Baron", 3, 8, function(ctx, st, jk)
         if ctx.other_card.rank == E.RANK.KING then return { x_mult = 1.5 } end
     end
 end)
+Sim._reg_joker("j_vagabond", "Vagabond", 3, 8, function(ctx, st, jk)
+    if ctx.joker_main and st.dollars < 4 then
+        return { create_tarot = true }
+    end
+end)
 Sim._reg_joker("j_cloud_9", "Cloud 9", 2, 7, function(ctx, st, jk)
     if ctx.round_end then
         local nines = 0
@@ -571,7 +644,9 @@ Sim._reg_joker("j_bull", "Bull", 2, 6, function(ctx, st, jk)
     if ctx.joker_main then return { chip_mod = 2 * math.max(st.dollars, 0) } end
 end)
 Sim._reg_joker("j_trading", "Trading Card", 2, 6, function(ctx, st, jk)
-    -- Discard 1 card for $3 if first discard (complex)
+    if ctx.on_discard and (st._discards_used or 0) == 0 and ctx.cards_discarded == 1 then
+        return { dollars = 3 }
+    end
 end)
 Sim._reg_joker("j_ancient", "Ancient Joker", 3, 8, function(ctx, st, jk)
     if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
@@ -598,10 +673,18 @@ Sim._reg_joker("j_campfire", "Campfire", 3, 9, function(ctx, st, jk)
     if ctx.joker_main then return { Xmult_mod = jk._campfire_x or 1 } end
 end)
 Sim._reg_joker("j_midas_mask", "Midas Mask", 2, 7, function(ctx, st, jk)
-    -- Face cards played become Gold (complex)
+    if ctx.after_play and ctx.scoring then
+        for _, c in ipairs(ctx.scoring) do
+            if c.rank >= E.RANK.JACK and c.rank <= E.RANK.KING and c.enhancement == 0 then
+                c.enhancement = E.ENHANCEMENT.GOLD
+            end
+        end
+    end
 end)
 Sim._reg_joker("j_luchador", "Luchador", 2, 5, function(ctx, st, jk)
-    -- Disable boss blind when sold (complex)
+    if ctx.selling_self and st.boss_name then
+        st._boss_disabled = true
+    end
 end)
 Sim._reg_joker("j_photograph", "Photograph", 1, 5, function(ctx, st, jk)
     if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
@@ -613,26 +696,65 @@ Sim._reg_joker("j_photograph", "Photograph", 1, 5, function(ctx, st, jk)
     if ctx.joker_main then jk._photo_triggered = false end
 end)
 Sim._reg_joker("j_dna", "DNA", 3, 8, function(ctx, st, jk)
-    -- Copy first card if only 1 played on first hand (complex)
+    if ctx.first_hand_drawn then
+        st._dna_active = true
+        st._dna_first_hand = true
+    end
+    if ctx.after_play and st._dna_first_hand and ctx.all_played and #ctx.all_played == 1 then
+        local src = ctx.all_played[1]
+        local uid = (st._uid_n or 0) + 1; st._uid_n = uid
+        local copy = Sim.Card.new(src.rank, src.suit, src.enhancement, src.edition, src.seal, uid)
+        copy.perma_bonus = src.perma_bonus or 0
+        st.hand[#st.hand + 1] = copy
+        st._dna_first_hand = false
+    end
 end)
 Sim._reg_joker("j_splash", "Splash", 1, 3, function(ctx, st, jk)
     -- All played cards count toward scoring (handled in evaluator)
 end)
 -- j_sixth_sense registered in 05_consumables.lua (needs CONS_POOL)
 Sim._reg_joker("j_seance", "Seance", 2, 6, function(ctx, st, jk)
-    -- Create Spectral if hand is Straight Flush (complex)
+    if ctx.after_play and ctx.all_hands and ctx.all_hands[E.HAND_TYPE.STRAIGHT_FLUSH] then
+        return { create_spectral = true }
+    end
 end)
 Sim._reg_joker("j_riff_raff", "Riff-raff", 1, 6, function(ctx, st, jk)
-    -- Create 2 common jokers on blind set (complex)
+    if ctx.setting_blind then
+        local count = math.min(2, st.joker_slots - #st.jokers)
+        for i = 1, count do
+            local pool = Sim.CardFactory.get_joker_pool(st, 1)
+            if #pool > 0 then
+                local jid = Sim.RNG.pick(st.rng, pool)
+                local def = Sim._JOKER_BY_ID[jid]
+                if def and #st.jokers < st.joker_slots then
+                    Sim.State.add_joker(st, def)
+                end
+            end
+        end
+    end
 end)
 Sim._reg_joker("j_diet_cola", "Diet Cola", 2, 6, function(ctx, st, jk)
-    -- Create Double Tag when sold (complex)
+    if ctx.selling_self then
+        Sim.Tag.add(st, "tag_double")
+    end
 end)
 Sim._reg_joker("j_gift", "Gift Card", 2, 6, function(ctx, st, jk)
-    -- +1 sell value to all jokers/consumables each round (complex)
+    if ctx.round_end then
+        st._gift_bonus = (st._gift_bonus or 0) + 1
+    end
 end)
 Sim._reg_joker("j_turtle_bean", "Turtle Bean", 2, 6, function(ctx, st, jk)
-    -- +5 hand size, -1 per round (complex)
+    if ctx.setting_blind then
+        st.hand_limit = st.hand_limit + 5
+        jk._turtle_h = 5
+    end
+    if ctx.round_end then
+        jk._turtle_h = (jk._turtle_h or 5) - 1
+        if jk._turtle_h <= 0 then
+            return { destroy_self = true }
+        end
+        st.hand_limit = math.max(1, st.hand_limit - 1)
+    end
 end)
 Sim._reg_joker("j_erosion", "Erosion", 2, 6, function(ctx, st, jk)
     if ctx.joker_main then
@@ -641,7 +763,11 @@ Sim._reg_joker("j_erosion", "Erosion", 2, 6, function(ctx, st, jk)
     end
 end)
 Sim._reg_joker("j_hallucination", "Hallucination", 1, 4, function(ctx, st, jk)
-    -- 1 in 2 chance to create Tarot when opening booster (complex)
+    if ctx.open_booster and #st.consumables < st.consumable_slots then
+        if Sim.RNG.next(st.rng) < 0.5 then
+            return { create_tarot = true }
+        end
+    end
 end)
 
 -- === Rare jokers ===
@@ -651,10 +777,14 @@ Sim._reg_joker("j_wee", "Wee Joker", 3, 8, function(ctx, st, jk)
     if ctx.joker_main then return { chip_mod = jk._wee_chips or 0 } end
 end)
 Sim._reg_joker("j_merry_andy", "Merry Andy", 2, 7, function(ctx, st, jk)
-    -- +3 discards, -1 hand size (passive)
+    if ctx.setting_blind then
+        st.discards_left = st.discards_left + 3
+        st.hand_limit = math.max(1, st.hand_limit - 1)
+    end
 end)
 Sim._reg_joker("j_oops", "Oops! All 6s", 2, 4, function(ctx, st, jk)
-    -- Double all listed probabilities (complex)
+    -- Double all listed probabilities (passive, handled in probability checks)
+    -- Any code checking Sim.RNG.next(st.rng) < odds should use 2*odds when this joker is present
 end)
 Sim._reg_joker("j_idol", "The Idol", 2, 6, function(ctx, st, jk)
     if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
@@ -686,11 +816,30 @@ Sim._reg_joker("j_hit_the_road", "Hit the Road", 3, 8, function(ctx, st, jk)
     if ctx.joker_main then return { Xmult_mod = jk._htr_x or 1 } end
 end)
 Sim._reg_joker("j_stuntman", "Stuntman", 3, 7, function(ctx, st, jk)
+    if ctx.setting_blind then
+        st.hand_limit = math.max(1, st.hand_limit - 2)
+    end
     if ctx.joker_main then return { chip_mod = 250 } end
-    -- -2 hand size (passive)
 end)
 Sim._reg_joker("j_invisible", "Invisible Joker", 3, 8, function(ctx, st, jk)
-    -- Duplicate random joker after 2 rounds (complex)
+    if ctx.round_end then
+        jk._invis_rounds = (jk._invis_rounds or 0) + 1
+    end
+    if ctx.selling_self and jk._invis_rounds and jk._invis_rounds >= 2 then
+        local candidates = {}
+        for _, j in ipairs(st.jokers) do
+            if j ~= jk and #st.jokers < st.joker_slots then
+                candidates[#candidates+1] = j
+            end
+        end
+        if #candidates > 0 then
+            local target = candidates[Sim.RNG.int(st.rng, 1, #candidates)]
+            local def = Sim._JOKER_BY_ID[target.id]
+            if def and #st.jokers < st.joker_slots then
+                Sim.State.add_joker(st, def)
+            end
+        end
+    end
 end)
 Sim._reg_joker("j_brainstorm", "Brainstorm", 3, 10, function(ctx, st, jk)
     -- Copy leftmost joker (similar to Blueprint)
@@ -705,7 +854,11 @@ Sim._reg_joker("j_brainstorm", "Brainstorm", 3, 10, function(ctx, st, jk)
     return def.apply(cc, st, target)
 end)
 Sim._reg_joker("j_satellite", "Satellite", 2, 6, function(ctx, st, jk)
-    -- $1 per unique planet used this run (complex)
+    if ctx.round_end then
+        local count = 0
+        for k, _ in pairs(st._planets_used or {}) do count = count + 1 end
+        return { dollars = count }
+    end
 end)
 Sim._reg_joker("j_drivers_license", "Driver's License", 3, 7, function(ctx, st, jk)
     if ctx.joker_main then
@@ -716,16 +869,20 @@ Sim._reg_joker("j_drivers_license", "Driver's License", 3, 7, function(ctx, st, 
     end
 end)
 Sim._reg_joker("j_cartomancer", "Cartomancer", 2, 6, function(ctx, st, jk)
-    -- Create Tarot on blind set (complex)
+    if ctx.setting_blind and #st.consumables < st.consumable_slots then
+        return { create_tarot = true }
+    end
 end)
 Sim._reg_joker("j_astronomer", "Astronomer", 2, 8, function(ctx, st, jk)
-    -- Planet cards free in shop (passive)
+    -- Passive: planet cards cost $0 in shop (handled in shop pricing)
+    st._planets_free = true
 end)
 Sim._reg_joker("j_bootstraps", "Bootstraps", 2, 7, function(ctx, st, jk)
     if ctx.joker_main then return { mult_mod = 2 * math.floor(math.max(st.dollars, 0) / 5) } end
 end)
 Sim._reg_joker("j_ring_master", "Showman", 2, 5, function(ctx, st, jk)
-    -- Cards can appear multiple times in shop (passive)
+    -- Passive: showman flag allows duplicate cards in shop
+    st._showman = true
 end)
 Sim._reg_joker("j_flower_pot", "Flower Pot", 2, 6, function(ctx, st, jk)
     if ctx.joker_main then
@@ -745,7 +902,10 @@ Sim._reg_joker("j_smeared", "Smeared Joker", 2, 7, function(ctx, st, jk)
     -- Hearts=Diamonds, Spades=Clubs (handled in _is_suit)
 end)
 Sim._reg_joker("j_throwback", "Throwback", 2, 6, function(ctx, st, jk)
-    -- +0.25 Xmult per blind skipped (complex)
+    if ctx.joker_main then
+        local skips = st._blinds_skipped or 0
+        if skips > 0 then return { Xmult_mod = 1 + 0.25 * skips } end
+    end
 end)
 Sim._reg_joker("j_rough_gem", "Rough Gem", 2, 7, function(ctx, st, jk)
     if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
@@ -770,28 +930,72 @@ Sim._reg_joker("j_onyx_agate", "Onyx Agate", 2, 7, function(ctx, st, jk)
     end
 end)
 Sim._reg_joker("j_glass", "Glass Joker", 2, 6, function(ctx, st, jk)
-    -- +0.75 Xmult per Glass card destroyed (complex)
+    if ctx.cards_destroyed then
+        for _, c in ipairs(ctx.destroyed or {}) do
+            if c.enhancement == E.ENHANCEMENT.GLASS then
+                jk._glass_x = (jk._glass_x or 1) + 0.75
+            end
+        end
+    end
+    if ctx.joker_main then return { Xmult_mod = jk._glass_x or 1 } end
 end)
 Sim._reg_joker("j_mr_bones", "Mr. Bones", 2, 5, function(ctx, st, jk)
-    -- Prevent death if chips >= 25% of blind (complex)
+    -- Prevent death if scored chips >= 25% of blind (checked in env step)
+    if ctx.game_over and st.chips >= st.blind_chips * 0.25 then
+        return { save_from_death = true }
+    end
 end)
 Sim._reg_joker("j_superposition", "Superposition", 1, 4, function(ctx, st, jk)
-    -- Create Tarot if straight contains Ace (complex)
+    if ctx.after_play and ctx.all_hands and ctx.all_hands[E.HAND_TYPE.STRAIGHT] then
+        for _, c in ipairs(ctx.scoring or {}) do
+            if c.rank == E.RANK.ACE then
+                return { create_tarot = true }
+            end
+        end
+    end
 end)
 Sim._reg_joker("j_todo_list", "To Do List", 1, 4, function(ctx, st, jk)
-    -- $4 if hand type matches random target (complex)
+    if ctx.after_play and ctx.hand_name then
+        if ctx.hand_name == (jk._todo_hand or "High Card") then
+            return { dollars = 4 }
+        end
+    end
+    if ctx.round_end then
+        local hands = {"High Card","Pair","Two Pair","Three of a Kind","Straight",
+            "Flush","Full House","Four of a Kind","Straight Flush","Five of a Kind",
+            "Flush House","Flush Five"}
+        jk._todo_hand = hands[Sim.RNG.int(st.rng, 1, #hands)]
+    end
 end)
 Sim._reg_joker("j_certificate", "Certificate", 2, 6, function(ctx, st, jk)
-    -- Create random sealed card on first hand drawn (complex)
+    if ctx.first_hand_drawn then
+        local seals = {E.SEAL.RED, E.SEAL.BLUE, E.SEAL.GOLD, E.SEAL.PURPLE}
+        local seal = seals[Sim.RNG.int(st.rng, 1, #seals)]
+        local rank = Sim.RNG.int(st.rng, 2, 14)
+        local suit = Sim.RNG.int(st.rng, 1, 4)
+        local uid = (st._uid_n or 0) + 1; st._uid_n = uid
+        local card = Sim.Card.new(rank, suit, 0, 0, seal, uid)
+        st.hand[#st.hand + 1] = card
+    end
 end)
 Sim._reg_joker("j_troubadour", "Troubadour", 2, 6, function(ctx, st, jk)
-    -- +2 hand size, -1 hand per round (passive)
+    if ctx.setting_blind then
+        st.hand_limit = st.hand_limit + 2
+        st.hands_left = math.max(1, st.hands_left - 1)
+    end
 end)
 
 -- === Legendary jokers (rarity 4) ===
 
 Sim._reg_joker("j_caino", "Caino", 4, 20, function(ctx, st, jk)
-    -- +1 Xmult per face card destroyed (complex)
+    if ctx.cards_destroyed then
+        for _, c in ipairs(ctx.destroyed or {}) do
+            if c.rank >= E.RANK.JACK and c.rank <= E.RANK.KING then
+                jk._caino_x = (jk._caino_x or 1) + 1
+            end
+        end
+    end
+    if ctx.joker_main then return { Xmult_mod = jk._caino_x or 1 } end
 end)
 Sim._reg_joker("j_triboulet", "Triboulet", 4, 20, function(ctx, st, jk)
     if ctx.individual and ctx.other_card and ctx.cardarea == "play" then
@@ -810,8 +1014,15 @@ Sim._reg_joker("j_yorick", "Yorick", 4, 20, function(ctx, st, jk)
     if ctx.joker_main then return { Xmult_mod = jk._yorick_x or 1 } end
 end)
 Sim._reg_joker("j_chicot", "Chicot", 4, 20, function(ctx, st, jk)
-    -- Disable boss blind effect (complex)
+    if ctx.setting_blind and st.boss_name then
+        st._boss_disabled = true
+    end
 end)
 Sim._reg_joker("j_perkeo", "Perkeo", 4, 20, function(ctx, st, jk)
-    -- Create negative copy of random consumable at shop end (complex)
+    if ctx.ending_shop and #st.consumables > 0 then
+        local src = st.consumables[Sim.RNG.int(st.rng, 1, #st.consumables)]
+        if src then
+            return { create_negative_copy = src.id }
+        end
+    end
 end)

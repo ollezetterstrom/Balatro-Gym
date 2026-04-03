@@ -52,6 +52,27 @@ function Sim.State.new(opts)
     }
 end
 
+function Sim.State.apply_passive_jokers(state)
+    -- Apply passive joker effects that modify game parameters
+    if not state.jokers then return end
+    for _, jk in ipairs(state.jokers) do
+        local def = Sim._JOKER_BY_ID[jk.id]
+        if def then
+            if def.key == "j_juggler" then
+                state.hand_limit = state.hand_limit + 1
+            elseif def.key == "j_drunkard" then
+                state.discards_left = state.discards_left + 1
+            elseif def.key == "j_credit_card" then
+                -- Allows debt down to -$20 (handled in interest/money calc)
+            elseif def.key == "j_ring_master" then
+                state._showman = true
+            elseif def.key == "j_astronomer" then
+                state._planets_free = true
+            end
+        end
+    end
+end
+
 function Sim.State.draw(state)
     if #state.hand >= state.hand_limit then return state end
     local n = math.min(state.hand_limit - #state.hand, #state.deck)

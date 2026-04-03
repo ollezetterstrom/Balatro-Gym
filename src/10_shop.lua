@@ -229,6 +229,18 @@ function Sim.Shop.generate(state)
         end
     end
 
+    -- Generate voucher slot (EXACT port of voucher shop logic)
+    -- Get available vouchers from pool
+    local voucher_pool, _ = Sim.CardFactory.get_current_pool(state, 'Voucher')
+    if voucher_pool and #voucher_pool > 0 then
+        local vkey = Sim.RNG.pick(state.rng, voucher_pool)
+        local def = Sim.Voucher.DEFS[vkey]
+        if def then
+            shop.voucher = vkey
+            shop.voucher_def = def
+        end
+    end
+
     -- Generate 2 booster packs
     shop.boosters = {}
     for i = 1, 2 do

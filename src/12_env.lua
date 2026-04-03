@@ -129,10 +129,12 @@ local function _step_selecting(state, atype, value)
 
             -- Glass card destruction (1/4 chance per Glass card)
             local destroyed = {}
+            local glass_shattered = {}
             for _, c in ipairs(played) do
                 if c.enhancement == E.ENHANCEMENT.GLASS and not Sim.Blind.is_card_debuffed(state, c) then
                     if state.rng and Sim.RNG.next(state.rng) < 0.25 then
                         destroyed[c] = true
+                        glass_shattered[#glass_shattered + 1] = c
                     end
                 end
             end
@@ -151,24 +153,64 @@ local function _step_selecting(state, atype, value)
             -- Boss: The Hook (discard 2 random cards after playing)
             Sim.Blind.on_after_play(state)
 
-            -- Joker "play" triggers
+            -- Joker "after_play" triggers (real game fires these after scoring)
             if state.jokers then
                 for ji = 1, #state.jokers do
                     local jk = state.jokers[ji]
                     local def = Sim._JOKER_BY_ID[jk.id]
                     if def and def.apply then
-                        local ctx = { after_play = true, hand_type = ht, scoring = scoring }
+                        local ctx = {
+                            after_play = true,
+                            hand_type = ht,
+                            hand_name = E.HAND_NAMES[ht] or "High Card",
+                            scoring = scoring,
+                            all_hands = all_h,
+                            all_played = played,
+                            cards_destroyed = next(destroyed),
+                            destroyed = glass_shattered,
+                            glass_shattered = glass_shattered,
+                            my_joker_index = ji,
+                        }
                         local fx = def.apply(ctx, state, jk)
                         if fx then
                             if fx.level_up then
                                 Sim.State.level_up(state, fx.level_up)
+                                state._planets_used = state._planets_used or {}
+                                state._planets_used[fx.level_up] = true
                             end
                             if fx.chip_mod then
                                 state.chips = state.chips + fx.chip_mod
                                 total = total + fx.chip_mod
                             end
-                            -- Note: after_play jokers should return chip_mod, not mult_mod.
-                            -- Mult is already finalized at this point.
+                            if fx.create_spectral and #state.consumables < state.consumable_slots then
+                                local spectral_pool = Sim.CardFactory.get_current_pool(state, 'Spectral')
+                                if spectral_pool and #spectral_pool > 0 then
+                                    local skey = Sim.RNG.pick(state.rng, spectral_pool)
+                                    local sdef = Sim.CONSUMABLE_DEFS[skey]
+                                    if sdef then
+                                        state._cons_n = (state._cons_n or 0) + 1
+                                        state.consumables[#state.consumables + 1] = {
+                                            id = sdef.id, uid = state._cons_n,
+                                        }
+                                    end
+                                end
+                            end
+                            if fx.create_tarot and #state.consumables < state.consumable_slots then
+                                local tarot_pool = Sim.CardFactory.get_current_pool(state, 'Tarot')
+                                if tarot_pool and #tarot_pool > 0 then
+                                    local tkey = Sim.RNG.pick(state.rng, tarot_pool)
+                                    local tdef = Sim.CONSUMABLE_DEFS[tkey]
+                                    if tdef then
+                                        state._cons_n = (state._cons_n or 0) + 1
+                                        state.consumables[#state.consumables + 1] = {
+                                            id = tdef.id, uid = state._cons_n,
+                                        }
+                                    end
+                                end
+                            end
+                            if fx.destroy_self then
+                                table.remove(state.jokers, ji)
+                            end
                         end
                     end
                 end
@@ -206,9 +248,30 @@ local function _step_selecting(state, atype, value)
             end
             local disc_ht = Sim.Eval.get_hand(disc_cards, state)
 
-            -- Trigger Burnt Joker (on_discard, is_first_discard) and Ramen
+            -- pre_discard context (Burnt Joker, real game state_events.lua:394)
             local num_discarded = #sorted
             local destroyed_jokers = {}
+            if state.jokers then
+                for ji = 1, #state.jokers do
+                    local jk = state.jokers[ji]
+                    local def = Sim._JOKER_BY_ID[jk.id]
+                    if def and def.apply then
+                        local ctx = {
+                            pre_discard = true,
+                            full_hand = disc_cards,
+                            my_joker_index = ji,
+                        }
+                        local fx = def.apply(ctx, state, jk)
+                        if fx then
+                            if fx.level_up then
+                                Sim.State.level_up(state, fx.level_up)
+                            end
+                        end
+                    end
+                end
+            end
+
+            -- on_discard context (real game state_events.lua:400+)
             if state.jokers then
                 for ji = 1, #state.jokers do
                     local jk = state.jokers[ji]
@@ -219,12 +282,12 @@ local function _step_selecting(state, atype, value)
                             is_first_discard = (state.discards_left == Sim.DEFAULTS.discards),
                             discarded_hand_type = disc_ht,
                             cards_discarded = num_discarded,
+                            full_hand = disc_cards,
+                            my_joker_index = ji,
                         }
                         local fx = def.apply(ctx, state, jk)
                         if fx then
-                            if fx.level_up then
-                                Sim.State.level_up(state, fx.level_up)
-                            end
+                            if fx.dollars then state.dollars = state.dollars + fx.dollars end
                             if fx.destroy_self then
                                 destroyed_jokers[#destroyed_jokers+1] = ji
                             end
@@ -242,6 +305,7 @@ local function _step_selecting(state, atype, value)
                 if c then state.discard[#state.discard+1] = c end
             end
             state.discards_left = state.discards_left - 1
+            state._discards_used = (state._discards_used or 0) + 1
             Sim.State.draw(state)
             state.selection = {}
 
@@ -277,21 +341,72 @@ function Sim._advance_blind(state)
     -- Collect blind reward + interest
     local reward_dollars = Sim.Blind.reward(
         bname=="Small" and 1 or bname=="Big" and 2 or 3)
-    state.dollars = state.dollars + reward_dollars + Sim.State.interest(state)
 
-    -- Round-end joker effects (Delayed Gratification, etc.)
+    -- End of round: fire end_of_round context for all jokers (real game state_events.lua:99)
+    local game_over = state.chips < state.blind_chips
+    local mr_bones_saved = false
     if state.jokers then
         for ji = 1, #state.jokers do
             local jk = state.jokers[ji]
             local def = Sim._JOKER_BY_ID[jk.id]
             if def and def.apply then
-                local ctx = { round_end = true }
+                local ctx = { end_of_round = true, game_over = game_over, my_joker_index = ji }
                 local fx = def.apply(ctx, state, jk)
-                if fx and fx.dollars then
-                    state.dollars = state.dollars + fx.dollars
+                if fx then
+                    if fx.saved then mr_bones_saved = true end
+                    if fx.dollars then state.dollars = state.dollars + fx.dollars end
+                end
+                -- Perishable decay (real game: 1/5 chance per round after 5 rounds)
+                if jk.perishable then
+                    jk._perish_rounds = (jk._perish_rounds or 0) + 1
+                    if jk._perish_rounds >= 5 and state.rng and Sim.RNG.next(state.rng) < 0.2 then
+                        table.remove(state.jokers, ji)
+                    end
+                end
+                -- Rental decay (real game: $3 per round)
+                if jk.rental then
+                    state.dollars = state.dollars - 3
                 end
             end
         end
+    end
+
+    -- Mr. Bones prevents game over if scored >= 25% of blind
+    if game_over and mr_bones_saved and state.chips >= state.blind_chips * 0.25 then
+        game_over = false
+    end
+
+    -- Process hand card end-of-round effects (real game state_events.lua:171-233)
+    for i = 1, #state.hand do
+        local c = state.hand[i]
+        local debuffed = Sim.Blind.is_card_debuffed(state, c)
+        if not debuffed then
+            local reps = 1
+            if c.seal == E.SEAL.RED then reps = 2 end
+            local has_mime = false
+            if state.jokers then
+                for _, jk in ipairs(state.jokers) do
+                    local def = Sim._JOKER_BY_ID[jk.id]
+                    if def and def.key == "j_mime" then has_mime = true; break end
+                end
+            end
+            if has_mime then reps = reps * 2 end
+            for r = 1, reps do
+                if c.enhancement == E.ENHANCEMENT.STEEL then
+                    state.dollars = state.dollars + 0
+                elseif c.enhancement == E.ENHANCEMENT.GOLD then
+                    state.dollars = state.dollars + 3
+                end
+            end
+        end
+    end
+
+    -- Trigger eval tags (Investment Tag)
+    Sim.Tag.trigger(state, { type = "eval" })
+
+    if not game_over then
+        state.dollars = state.dollars + reward_dollars + Sim.State.interest(state)
+        state._unused_discards = (state._unused_discards or 0) + state.discards_left
     end
 
     -- Move played cards to discard, clear hand
@@ -299,6 +414,10 @@ function Sim._advance_blind(state)
     state.hand = {}
     state.selection = {}
 
+    -- Draw from discard to deck (rebuild deck)
+    Sim.State.rebuild_deck(state)
+
+    -- Reset round state
     local next_btype = Sim.Blind.next_type(state)
     if not next_btype then
         -- Ante complete
@@ -307,14 +426,204 @@ function Sim._advance_blind(state)
             state.phase = E.PHASE.WIN
             return Sim.Obs.encode(state), R.GAME_WON, true
         end
+        -- Boss blind modifiers
+        if state.modifiers and state.modifiers.set_eternal_ante and state.ante == state.modifiers.set_eternal_ante then
+            for _, jk in ipairs(state.jokers) do jk.eternal = true end
+        end
+        if state.modifiers and state.modifiers.set_joker_slots_ante and state.ante == state.modifiers.set_joker_slots_ante then
+            state.joker_slots = 0
+        end
+
         Sim.Blind.init_ante(state)
         next_btype = Sim.Blind.next_type(state)
-        -- Voucher reset would go here
+        state._used_vouchers = state._used_vouchers or {}
         Sim.Shop.generate(state)
         state.phase = E.PHASE.SHOP
         return Sim.Obs.encode(state), R.ANTE_UP, false
     else
+        state._discards_used = 0
+        state._reroll_cost_increase = 0
+        state._free_rerolls = 0
+        local chaos_count = #Sim.CardFactory.find_joker(state, 'j_chaos')
+        state._free_rerolls = chaos_count
+
+        state._boss_disabled = false
+        state._planets_used = state._planets_used or {}
+
+        -- Fire setting_blind context for all jokers
+        local blind_def = Sim.Blind.get_def(state, next_btype)
         Sim.Blind.setup(state, next_btype)
+
+        -- Trigger round_start_bonus tags (Juggle Tag)
+        Sim.Tag.trigger(state, { type = "round_start_bonus" })
+
+        if state.jokers then
+            for ji = 1, #state.jokers do
+                local jk = state.jokers[ji]
+                local def = Sim._JOKER_BY_ID[jk.id]
+                if def and def.apply then
+                    local ctx = {
+                        setting_blind = true,
+                        blind = blind_def,
+                        my_joker_index = ji,
+                    }
+                    local fx = def.apply(ctx, state, jk)
+                    if fx then
+                        if fx.destroy_self then
+                            table.remove(state.jokers, ji)
+                        end
+                        if fx.boss_disabled then state._boss_disabled = true end
+                    end
+                end
+            end
+        end
+
+        state.phase = E.PHASE.SELECTING_HAND
+        return Sim.Obs.encode(state), 0, false
+    end
+end
+
+    -- Collect blind reward + interest
+    local reward_dollars = Sim.Blind.reward(
+        bname=="Small" and 1 or bname=="Big" and 2 or 3)
+
+    -- End of round: fire end_of_round context for all jokers (real game state_events.lua:99)
+    local game_over = state.chips < state.blind_chips
+    local mr_bones_saved = false
+    if state.jokers then
+        for ji = 1, #state.jokers do
+            local jk = state.jokers[ji]
+            local def = Sim._JOKER_BY_ID[jk.id]
+            if def and def.apply then
+                local ctx = { end_of_round = true, game_over = game_over, my_joker_index = ji }
+                local fx = def.apply(ctx, state, jk)
+                if fx then
+                    if fx.saved then mr_bones_saved = true end
+                    if fx.dollars then state.dollars = state.dollars + fx.dollars end
+                end
+                -- Perishable decay (real game: 1/5 chance per round after 5 rounds)
+                if jk.perishable then
+                    jk._perish_rounds = (jk._perish_rounds or 0) + 1
+                    if jk._perish_rounds >= 5 and state.rng and Sim.RNG.next(state.rng) < 0.2 then
+                        table.remove(state.jokers, ji)
+                    end
+                end
+                -- Rental decay (real game: $3 per round)
+                if jk.rental then
+                    state.dollars = state.dollars - 3
+                end
+            end
+        end
+    end
+
+    -- Mr. Bones prevents game over if scored >= 25% of blind
+    if game_over and mr_bones_saved and state.chips >= state.blind_chips * 0.25 then
+        game_over = false
+    end
+
+    -- Process hand card end-of-round effects (real game state_events.lua:171-233)
+    -- Steel: ×1.5 mult per card, Gold: +$3 per card
+    -- Red seal: re-trigger, Mime: double retriggers
+    for i = 1, #state.hand do
+        local c = state.hand[i]
+        local debuffed = Sim.Blind.is_card_debuffed(state, c)
+        if not debuffed then
+            local reps = 1
+            if c.seal == E.SEAL.RED then reps = 2 end
+            -- Check for Mime (double retriggers)
+            local has_mime = false
+            if state.jokers then
+                for _, jk in ipairs(state.jokers) do
+                    local def = Sim._JOKER_BY_ID[jk.id]
+                    if def and def.key == "j_mime" then has_mime = true; break end
+                end
+            end
+            if has_mime then reps = reps * 2 end
+            for r = 1, reps do
+                if c.enhancement == E.ENHANCEMENT.STEEL then
+                    state.dollars = state.dollars + 0  -- Steel is ×1.5 mult held, not dollars
+                elseif c.enhancement == E.ENHANCEMENT.GOLD then
+                    state.dollars = state.dollars + 3
+                end
+            end
+        end
+    end
+
+    if not game_over then
+        state.dollars = state.dollars + reward_dollars + Sim.State.interest(state)
+        -- Track unused discards (real game state_events.lua:124)
+        state._unused_discards = (state._unused_discards or 0) + state.discards_left
+    end
+
+    -- Move played cards to discard, clear hand (real game state_events.lua:237)
+    for _, c in ipairs(state.hand) do state.discard[#state.discard+1] = c end
+    state.hand = {}
+    state.selection = {}
+
+    -- Draw from discard to deck (rebuild deck) (real game state_events.lua:250)
+    Sim.State.rebuild_deck(state)
+
+    -- Reset round state (real game state_events.lua:290-317)
+    local next_btype = Sim.Blind.next_type(state)
+    if not next_btype then
+        -- Ante complete
+        state.ante = state.ante + 1
+        if state.ante > 8 then
+            state.phase = E.PHASE.WIN
+            return Sim.Obs.encode(state), R.GAME_WON, true
+        end
+        -- Boss blind modifiers (real game state_events.lua:240-248)
+        if state.modifiers and state.modifiers.set_eternal_ante and state.ante == state.modifiers.set_eternal_ante then
+            for _, jk in ipairs(state.jokers) do jk.eternal = true end
+        end
+        if state.modifiers and state.modifiers.set_joker_slots_ante and state.ante == state.modifiers.set_joker_slots_ante then
+            state.joker_slots = 0
+        end
+
+        Sim.Blind.init_ante(state)
+        next_btype = Sim.Blind.next_type(state)
+        -- Voucher reset
+        state._used_vouchers = state._used_vouchers or {}
+        Sim.Shop.generate(state)
+        state.phase = E.PHASE.SHOP
+        return Sim.Obs.encode(state), R.ANTE_UP, false
+    else
+        -- Reset round state for new blind (real game state_events.lua:258-283)
+        state._discards_used = 0
+        state._reroll_cost_increase = 0
+        state._free_rerolls = 0
+        -- Chaos the Clown free rerolls (real game state_events.lua:311-312)
+        local chaos_count = #Sim.CardFactory.find_joker(state, 'j_chaos')
+        state._free_rerolls = chaos_count
+
+        -- Reset blind-specific state
+        state._boss_disabled = false
+        state._planets_used = state._planets_used or {}
+
+        -- Fire setting_blind context for all jokers (real game state_events.lua:335-337)
+        local blind_def = Sim.Blind.get_def(state, next_btype)
+        Sim.Blind.setup(state, next_btype)
+        if state.jokers then
+            for ji = 1, #state.jokers do
+                local jk = state.jokers[ji]
+                local def = Sim._JOKER_BY_ID[jk.id]
+                if def and def.apply then
+                    local ctx = {
+                        setting_blind = true,
+                        blind = blind_def,
+                        my_joker_index = ji,
+                    }
+                    local fx = def.apply(ctx, state, jk)
+                    if fx then
+                        if fx.destroy_self then
+                            table.remove(state.jokers, ji)
+                        end
+                        if fx.boss_disabled then state._boss_disabled = true end
+                    end
+                end
+            end
+        end
+
         state.phase = E.PHASE.SELECTING_HAND
         return Sim.Obs.encode(state), 0, false
     end

@@ -1,39 +1,44 @@
--- src/14_card_factory.lua — Card creation system with pools and rarity
+-- src/14_card_factory.lua — Card creation system with pools and culling
 --
--- Provides Sim.create_card() for creating cards with proper pools, rarity rolls,
--- and pool culling (removes owned cards, respects flags).
---
--- Depends on: 04_jokers.lua (Sim.JOKER_DEFS), 05_consumables.lua (Sim.CONSUMABLE_DEFS)
+-- EXACT port of real game's create_card and get_current_pool.
+-- Real game sources:
+--   common_events.lua:1963-2053  get_current_pool
+--   common_events.lua:2055-2080  poll_edition
+--   common_events.lua:2082-2154  create_card
+--   UI_definitions.lua:742-800   create_card_for_shop
 
 Sim.CardFactory = {}
 
---- Rarity pools (built from joker definitions)
+-- ========================================================================= --
+-- POOL DEFINITIONS (built from joker/consumable definitions)
+-- ========================================================================= --
+
+--- Joker rarity pools
 Sim.JOKER_RARITY_POOLS = { [1] = {}, [2] = {}, [3] = {}, [4] = {} }
 for _, def in pairs(Sim.JOKER_DEFS) do
     local r = def.rarity or 1
     Sim.JOKER_RARITY_POOLS[r] = Sim.JOKER_RARITY_POOLS[r] or {}
-    Sim.JOKER_RARITY_POOLS[r][#Sim.JOKER_RARITY_POOLS[r] + 1] = def.id
+    Sim.JOKER_RARITY_POOLS[r][#Sim.JOKER_RARITY_POOLS[r] + 1] = def.key
 end
 
 --- Consumable type pools
 Sim.TAROT_POOL = {}
 Sim.PLANET_POOL = {}
 Sim.SPECTRAL_POOL = {}
-for _, def in pairs(Sim.CONSUMABLE_DEFS) do
-    local k = def.key or ""
-    if k:find("pluto") or k:find("mercury") or k:find("venus") or k:find("earth") or
-       k:find("mars") or k:find("jupiter") or k:find("saturn") or k:find("neptune") or
-       k:find("uranus") or k:find("planet_x") or k:find("ceres") or k:find("eris") then
-        Sim.PLANET_POOL[#Sim.PLANET_POOL + 1] = def.id
-    elseif k:find("familiar") or k:find("grim") or k:find("incantation") or
-           k:find("talisman") or k:find("aura") or k:find("wraith") or
-           k:find("sigil") or k:find("ouija") or k:find("ectoplasm") or
-           k:find("immolate") or k:find("ankh") or k:find("deja_vu") or
-           k:find("hex") or k:find("trance") or k:find("medium") or k:find("cryptid") then
-        Sim.SPECTRAL_POOL[#Sim.SPECTRAL_POOL + 1] = def.id
-    else
-        Sim.TAROT_POOL[#Sim.TAROT_POOL + 1] = def.id
+for key, def in pairs(Sim.CONSUMABLE_DEFS) do
+    if def.set == "Planet" then
+        Sim.PLANET_POOL[#Sim.PLANET_POOL + 1] = key
+    elseif def.set == "Spectral" then
+        Sim.SPECTRAL_POOL[#Sim.SPECTRAL_POOL + 1] = key
+    elseif def.set == "Tarot" then
+        Sim.TAROT_POOL[#Sim.TAROT_POOL + 1] = key
     end
+end
+
+--- Voucher pool
+Sim.VOUCHER_POOL = {}
+for key, def in pairs(Sim.Voucher.DEFS) do
+    Sim.VOUCHER_POOL[#Sim.VOUCHER_POOL + 1] = key
 end
 
 --- Playing card pool (52 standard cards)
@@ -43,6 +48,203 @@ for suit = 1, 4 do
         Sim.PLAYING_CARD_POOL[#Sim.PLAYING_CARD_POOL + 1] = { rank = rank, suit = suit }
     end
 end
+
+-- ========================================================================= --
+-- CHECK IF PLAYER HAS A JOKER (like real game's find_joker)
+-- ========================================================================= --
+
+--- Check if player has a joker by key. Returns list of matching jokers.
+function Sim.CardFactory.find_joker(state, key)
+    local results = {}
+    for _, jk in ipairs(state.jokers or {}) do
+        local def = Sim._JOKER_BY_ID[jk.id]
+        if def and def.key == key then
+            results[#results + 1] = jk
+        end
+    end
+    return results
+end
+
+--- Check if player has a joker by key (boolean).
+function Sim.CardFactory.has_joker(state, key)
+    return #Sim.CardFactory.find_joker(state, key) > 0
+end
+
+--- Check if player has a specific voucher.
+function Sim.CardFactory.has_voucher(state, key)
+    return state.vouchers and state.vouchers[key] == true
+end
+
+-- ========================================================================= --
+-- GET CURRENT POOL (EXACT port of get_current_pool, common_events.lua:1963)
+-- ========================================================================= --
+
+--- Build the current pool for a card type, applying all culling rules.
+--- Returns: pool (list of keys), pool_key (string for RNG seed)
+function Sim.CardFactory.get_current_pool(state, _type, _rarity, _legendary, _append)
+    local pool = {}
+    local starting_pool, pool_key = nil, ''
+
+    if _type == 'Joker' then
+        local rarity = _rarity or Sim.RNG.next(state.rng)
+        rarity = (_legendary and 4) or (rarity > 0.95 and 3) or (rarity > 0.7 and 2) or 1
+        starting_pool = Sim.JOKER_RARITY_POOLS[rarity]
+        pool_key = 'Joker' .. rarity .. ((not _legendary and _append) or '')
+    else
+        if _type == 'Tarot' then starting_pool = Sim.TAROT_POOL
+        elseif _type == 'Planet' then starting_pool = Sim.PLANET_POOL
+        elseif _type == 'Spectral' then starting_pool = Sim.SPECTRAL_POOL
+        elseif _type == 'Voucher' then starting_pool = Sim.VOUCHER_POOL
+        else starting_pool = {}
+        end
+        pool_key = _type .. (_append or '')
+    end
+
+    if not starting_pool or #starting_pool == 0 then
+        -- Fallback pools (real game line 2039-2049)
+        if _type == 'Tarot' then return { 'c_strength' }, 'Tarot'
+        elseif _type == 'Planet' then return { 'c_pluto' }, 'Planet'
+        elseif _type == 'Spectral' then return { 'c_incantation' }, 'Spectral'
+        elseif _type == 'Joker' then return { 'j_joker' }, 'Joker'
+        elseif _type == 'Voucher' then return { 'v_blank' }, 'Voucher'
+        else return { 'j_joker' }, 'Joker'
+        end
+    end
+
+    -- Check for Showman
+    local has_showman = #Sim.CardFactory.find_joker(state, 'j_ring_master') > 0
+
+    -- Cull the pool (real game line 1976-2036)
+    local pool_size = 0
+    for _, key in ipairs(starting_pool) do
+        local add = nil
+
+        if _type == 'Joker' then
+            local def = Sim.JOKER_DEFS[key]
+            if not def then
+                pool[#pool + 1] = 'UNAVAILABLE'
+            elseif not (state._used_jokers and state._used_jokers[key]) and not has_showman then
+                -- Joker not used and no Showman: include if unlocked
+                if def.unlocked ~= false or def.rarity == 4 then
+                    -- Enhancement gate check
+                    if def.enhancement_gate then
+                        -- Only include if deck has a card with this enhancement
+                        local has_enhancement = false
+                        for _, c in ipairs(state.deck) do
+                            if c.enhancement == def.enhancement_gate then
+                                has_enhancement = true
+                                break
+                            end
+                        end
+                        if has_enhancement then add = true end
+                    else
+                        add = true
+                    end
+                end
+            elseif has_showman then
+                -- Showman: include all jokers
+                if def.unlocked ~= false or def.rarity == 4 then
+                    if def.enhancement_gate then
+                        local has_enhancement = false
+                        for _, c in ipairs(state.deck) do
+                            if c.enhancement == def.enhancement_gate then
+                                has_enhancement = true
+                                break
+                            end
+                        end
+                        if has_enhancement then add = true end
+                    else
+                        add = true
+                    end
+                end
+            end
+            -- Black Hole and The Soul are never in normal pools
+            if def and (def.key == 'j_black_hole' or def.key == 'j_the_soul') then
+                add = nil
+            end
+
+        elseif _type == 'Voucher' then
+            local def = Sim.Voucher.DEFS[key]
+            if def then
+                if not (state._used_vouchers and state._used_vouchers[key]) then
+                    local include = true
+                    -- Check prerequisites
+                    if def.requires then
+                        if not state._used_vouchers or not state._used_vouchers[def.requires] then
+                            include = false
+                        end
+                    end
+                    -- Check if already in shop
+                    if state.shop and state.shop.voucher and state.shop.voucher == key then
+                        include = false
+                    end
+                    if include then add = true end
+                end
+            end
+
+        elseif _type == 'Planet' then
+            local def = Sim.CONSUMABLE_DEFS[key]
+            if def then
+                -- Softlock: only include if hand type has been played
+                if def.config and def.config.softlock then
+                    local ht = def.config.hand_type
+                    if ht and state.hand_type_counts and state.hand_type_counts[ht] and state.hand_type_counts[ht] > 0 then
+                        add = true
+                    end
+                else
+                    add = true
+                end
+            end
+
+        elseif _type == 'Tarot' or _type == 'Spectral' then
+            local def = Sim.CONSUMABLE_DEFS[key]
+            if def then
+                -- Black Hole and The Soul excluded from normal pools
+                if def.key == 'c_black_hole' or def.key == 'c_soul' then
+                    add = nil
+                else
+                    add = true
+                end
+            end
+        end
+
+        -- Pool flags
+        if _type == 'Joker' then
+            local def = Sim.JOKER_DEFS[key]
+            if def then
+                if def.no_pool_flag and state._pool_flags and state._pool_flags[def.no_pool_flag] then add = nil end
+                if def.yes_pool_flag and state._pool_flags and not state._pool_flags[def.yes_pool_flag] then add = nil end
+            end
+        end
+
+        -- Banned keys
+        if state._banned_keys and state._banned_keys[key] then add = nil end
+
+        if add then
+            pool[#pool + 1] = key
+            pool_size = pool_size + 1
+        else
+            pool[#pool + 1] = 'UNAVAILABLE'
+        end
+    end
+
+    -- If pool is empty, use fallback
+    if pool_size == 0 then
+        if _type == 'Tarot' then return { 'c_strength' }, 'Tarot'
+        elseif _type == 'Planet' then return { 'c_pluto' }, 'Planet'
+        elseif _type == 'Spectral' then return { 'c_incantation' }, 'Spectral'
+        elseif _type == 'Joker' then return { 'j_joker' }, 'Joker'
+        elseif _type == 'Voucher' then return { 'v_blank' }, 'Voucher'
+        else return { 'j_joker' }, 'Joker'
+        end
+    end
+
+    return pool, pool_key .. (not _legendary and (state.ante or 1) or '')
+end
+
+-- ========================================================================= --
+-- RARITY ROLL (EXACT port)
+-- ========================================================================= --
 
 --- Roll rarity for a joker. Returns 1-4.
 --- Real game: pseudorandom('rarity'..ante..append) → roll
@@ -56,40 +258,40 @@ function Sim.CardFactory.roll_rarity(state, rng)
     end
 end
 
---- Roll edition for a card. Returns edition number (0=none, 1=foil, 2=holo, 3=poly, 4=neg).
---- Real game poll_edition (common_events.lua:2055-2080):
----   p = pseudorandom(key)
----   if p > 1 - 0.003*_mod and not _no_neg → negative
----   elseif p > 1 - 0.006*edition_rate*_mod → polychrome
----   elseif p > 1 - 0.02*edition_rate*_mod → holo
----   elseif p > 1 - 0.04*edition_rate*_mod → foil
---- MARGINAL probabilities: neg 0.3%, poly 0.3%, holo 1.4%, foil 2.0%
-function Sim.CardFactory.roll_edition(state, rng, _mod, _no_neg, _guaranteed)
-    _mod = _mod or 1.0
+-- ========================================================================= --
+-- EDITION ROLL (EXACT port of poll_edition, common_events.lua:2055)
+-- ========================================================================= --
+
+--- Roll edition for a card.
+--- _key: RNG seed key
+--- _mod: multiplier (default 1)
+--- _no_neg: if true, never roll negative
+--- _guaranteed: if true, use fixed thresholds (for packs)
+function Sim.CardFactory.roll_edition(state, rng, _key, _mod, _no_neg, _guaranteed)
+    _mod = _mod or 1
     local p = Sim.RNG.next(rng)
     local er = state._edition_rate or 1.0
     if _guaranteed then
-        if p > 1 - 0.003*25 and not _no_neg then return 4 end
-        if p > 1 - 0.006*25 then return 3 end
-        if p > 1 - 0.02*25 then return 2 end
-        if p > 1 - 0.04*25 then return 1 end
+        if p > 1 - 0.003 * 25 and not _no_neg then return { negative = true }
+        elseif p > 1 - 0.006 * 25 then return { polychrome = true }
+        elseif p > 1 - 0.02 * 25 then return { holo = true }
+        elseif p > 1 - 0.04 * 25 then return { foil = true }
+        end
     else
-        if p > 1 - 0.003*_mod and not _no_neg then return 4 end
-        if p > 1 - 0.006*er*_mod then return 3 end
-        if p > 1 - 0.02*er*_mod then return 2 end
-        if p > 1 - 0.04*er*_mod then return 1 end
+        if p > 1 - 0.003 * _mod and not _no_neg then return { negative = true }
+        elseif p > 1 - 0.006 * er * _mod then return { polychrome = true }
+        elseif p > 1 - 0.02 * er * _mod then return { holo = true }
+        elseif p > 1 - 0.04 * er * _mod then return { foil = true }
+        end
     end
-    return 0
+    return nil
 end
 
---- Roll stickers for a joker (eternal/perishable/rental).
---- Real game create_card (common_events.lua:2133-2147):
----   epp = pseudorandom(poll_key..ante)
----   if enable_eternals and epp > 0.7 → eternal
----   elseif enable_perishables and 0.4 < epp <= 0.7 → perishable
----   rental check: pseudorandom(key..ante) > 0.7 → rental
---- All independent probabilities.
-function Sim.CardFactory.roll_stickers(state, rng)
+-- ========================================================================= --
+-- STICKER ROLL (EXACT port of create_card sticker logic, common_events.lua:2133)
+-- ========================================================================= --
+
+function Sim.CardFactory.roll_stickers(state, rng, area)
     local eternal = false
     local perishable = false
     local rental = false
@@ -98,14 +300,14 @@ function Sim.CardFactory.roll_stickers(state, rng)
         eternal = true
     end
 
-    if state.modifiers then
+    if area == "shop_jokers" or area == "pack_cards" then
         local epp = Sim.RNG.next(rng)
-        if state.modifiers.enable_eternals and epp > 0.7 then
+        if state.modifiers and state.modifiers.enable_eternals and epp > 0.7 then
             eternal = true
-        elseif state.modifiers.enable_perishables and epp > 0.4 and epp <= 0.7 then
+        elseif state.modifiers and state.modifiers.enable_perishables and epp > 0.4 and epp <= 0.7 then
             perishable = true
         end
-        if state.modifiers.enable_rentals and Sim.RNG.next(rng) > 0.7 then
+        if state.modifiers and state.modifiers.enable_rentals and Sim.RNG.next(rng) > 0.7 then
             rental = true
         end
     end
@@ -113,201 +315,132 @@ function Sim.CardFactory.roll_stickers(state, rng)
     return eternal, perishable, rental
 end
 
---- Get available joker IDs for a given rarity, excluding owned jokers.
---- If showman is true, does NOT exclude owned jokers.
-function Sim.CardFactory.get_joker_pool(state, rarity, showman)
-    local pool = Sim.JOKER_RARITY_POOLS[rarity]
-    if not pool or #pool == 0 then return {} end
-    if showman then return pool end
+-- ========================================================================= --
+-- SOUL / BLACK HOLE CHECK (EXACT port of create_card, common_events.lua:2088)
+-- ========================================================================= --
 
-    -- Build set of owned joker IDs
-    local owned = {}
-    for _, jk in ipairs(state.jokers) do
-        owned[jk.id] = true
-    end
-
-    -- Filter out owned
-    local available = {}
-    for _, jid in ipairs(pool) do
-        if not owned[jid] then
-            local def = Sim._JOKER_BY_ID[jid]
-            -- Skip locked/undiscovered
-            if def and def.key ~= "j_locked" and def.key ~= "j_undiscovered" then
-                available[#available + 1] = jid
+function Sim.CardFactory.check_soul(state, rng, _type, _append)
+    -- Soul: 0.3% when creating Tarot or Spectral
+    if _type == 'Tarot' or _type == 'Spectral' then
+        -- Check if c_soul is already used and no Showman
+        local soul_used = state._used_jokers and state._used_jokers['c_soul']
+        local has_showman = #Sim.CardFactory.find_joker(state, 'j_ring_master') > 0
+        if not soul_used or has_showman then
+            if Sim.RNG.next(rng) > 0.997 then
+                return 'c_soul'
             end
         end
     end
-    return available
-end
-
---- Get available consumable IDs for a given type.
---- type: "tarot", "planet", "spectral"
-function Sim.CardFactory.get_consumable_pool(state, ctype, showman)
-    local pool
-    if ctype == "tarot" then pool = Sim.TAROT_POOL
-    elseif ctype == "planet" then pool = Sim.PLANET_POOL
-    elseif ctype == "spectral" then pool = Sim.SPECTRAL_POOL
-    else return {}
-    end
-    if showman then return pool end
-
-    -- Filter out owned consumables
-    local owned = {}
-    for _, cs in ipairs(state.consumables) do
-        owned[cs.id] = true
-    end
-
-    local available = {}
-    for _, cid in ipairs(pool) do
-        if not owned[cid] then
-            available[#available + 1] = cid
+    -- Black Hole: 0.3% when creating Planet or Spectral
+    if _type == 'Planet' or _type == 'Spectral' then
+        local bh_used = state._used_jokers and state._used_jokers['c_black_hole']
+        local has_showman = #Sim.CardFactory.find_joker(state, 'j_ring_master') > 0
+        if not bh_used or has_showman then
+            if Sim.RNG.next(rng) > 0.997 then
+                return 'c_black_hole'
+            end
         end
     end
-    return available
+    return nil
 end
 
---- Create a card of the given type.
---- Exact port of create_card (common_events.lua:2082-2154)
----
---- card_type: "Joker", "Tarot", "Planet", "Spectral", "Playing Card"
---- state: game state
---- rng: RNG instance
---- opts: optional table { rarity, force_key, showman, soulable, area, key_append }
----
---- Returns: card table or nil if pool is empty
+-- ========================================================================= --
+-- CREATE CARD (EXACT port of create_card, common_events.lua:2082)
+-- ========================================================================= --
+
 function Sim.CardFactory.create(card_type, state, rng, opts)
     opts = opts or {}
-    local rarity = opts.rarity
-    local force_key = opts.force_key
-    local showman = opts.showman
-    local soulable = opts.soulable  -- default true for consumables
     local area = opts.area or ""
+    local soulable = opts.soulable
+    local forced_key = opts.force_key
     local key_append = opts.key_append or ""
+    local _rarity = opts.rarity
+    local legendary = opts.legendary or false
 
-    -- Default soulable to true for Tarot/Planet/Spectral
+    -- Default soulable
     if soulable == nil and (card_type == "Tarot" or card_type == "Planet" or card_type == "Spectral") then
         soulable = true
     end
     if soulable == nil then soulable = false end
 
+    -- Soul / Black Hole check
+    if soulable and not forced_key then
+        local soul_key = Sim.CardFactory.check_soul(state, rng, card_type, key_append)
+        if soul_key then
+            forced_key = soul_key
+        end
+    end
+
+    -- Base type
+    if card_type == 'Base' then
+        forced_key = 'c_base'
+    end
+
+    local center_key = nil
+
+    if forced_key then
+        -- Check if banned
+        if not (state._banned_keys and state._banned_keys[forced_key]) then
+            center_key = forced_key
+        end
+    end
+
+    if not center_key then
+        -- Get pool and pick
+        local pool, pool_key = Sim.CardFactory.get_current_pool(state, card_type, _rarity, legendary, key_append)
+        center_key = Sim.RNG.pick(rng, pool)
+        local it = 1
+        while center_key == 'UNAVAILABLE' do
+            it = it + 1
+            center_key = Sim.RNG.pick(rng, pool)
+        end
+    end
+
+    if not center_key then return nil end
+
+    -- Create the card
     if card_type == "Joker" then
-        -- Roll rarity if not specified
-        local r = rarity or Sim.CardFactory.roll_rarity(state, rng)
-        if r == 4 then r = 4 end
+        local def = Sim.JOKER_DEFS[center_key]
+        if not def then return nil end
 
-        -- Legendary only via Soul card, not normal creation
-        if r == 4 then
-            local leg_pool = Sim.JOKER_RARITY_POOLS[4]
-            if not leg_pool or #leg_pool == 0 then return nil end
-            local jid = Sim.RNG.pick(rng, leg_pool)
-            state._uid_n = (state._uid_n or 0) + 1
-            return { id = jid, edition = 0, eternal = false, perishable = false,
-                     rental = false, uid = state._uid_n, _new = true }
-        end
+        -- Roll edition
+        local edition = Sim.CardFactory.roll_edition(state, rng, 'edi' .. key_append .. (state.ante or 1))
 
-        -- Get pool for this rarity
-        local pool = Sim.CardFactory.get_joker_pool(state, r, showman)
-        if #pool == 0 then
-            for fallback_r = 1, 3 do
-                pool = Sim.CardFactory.get_joker_pool(state, fallback_r, showman)
-                if #pool > 0 then break end
-            end
-        end
-        if #pool == 0 then return nil end
-
-        local jid
-        if force_key then
-            local def = Sim.JOKER_DEFS[force_key]
-            jid = def and def.id or Sim.RNG.pick(rng, pool)
-        else
-            jid = Sim.RNG.pick(rng, pool)
-        end
-
-        -- Roll edition (EXACT: common_events.lua poll_edition)
-        local edition = Sim.CardFactory.roll_edition(state, rng)
-
-        -- Roll stickers (EXACT: common_events.lua:2133-2147)
-        -- Only for shop_jokers and pack_cards areas
-        local eternal, perishable, rental = false, false, false
-        if area == "shop_jokers" or area == "pack_cards" then
-            eternal, perishable, rental = Sim.CardFactory.roll_stickers(state, rng)
-        end
-        -- Override: all_eternal modifier
-        if state.modifiers and state.modifiers.all_eternal then
-            eternal = true
-        end
+        -- Roll stickers
+        local eternal, perishable, rental = Sim.CardFactory.roll_stickers(state, rng, area)
 
         state._uid_n = (state._uid_n or 0) + 1
-        return { id = jid, edition = edition, eternal = eternal, perishable = perishable,
-                 rental = rental, uid = state._uid_n, _new = true }
+        return {
+            id = def.id, edition = edition and (edition.negative and 4 or edition.polychrome and 3 or edition.holo and 2 or edition.foil and 1 or 0) or 0,
+            eternal = eternal, perishable = perishable, rental = rental,
+            uid = state._uid_n, _new = true
+        }
 
     elseif card_type == "Tarot" or card_type == "Planet" or card_type == "Spectral" then
-        -- Soul / Black Hole check (EXACT: common_events.lua:2088-2101)
-        -- Soul: 0.3% when creating Tarot or Spectral (not if already used and no Showman)
-        if soulable and card_type ~= "Planet" then
-            local soul_roll = Sim.RNG.next(rng)
-            if soul_roll > 0.997 then  -- NOTE: > 0.997, not < 0.003
-                local soul_def = Sim.CONSUMABLE_DEFS["c_soul"]
-                if soul_def then
-                    state._uid_n = (state._uid_n or 0) + 1
-                    return { id = soul_def.id, uid = state._uid_n, _new = true }
-                end
-            end
-        end
-        -- Black Hole: 0.3% when creating Planet or Spectral
-        if soulable and card_type ~= "Tarot" then
-            local bh_roll = Sim.RNG.next(rng)
-            if bh_roll > 0.997 then
-                local bh_def = Sim.CONSUMABLE_DEFS["c_black_hole"]
-                if bh_def then
-                    state._uid_n = (state._uid_n or 0) + 1
-                    return { id = bh_def.id, uid = state._uid_n, _new = true }
-                end
-            end
-        end
-
-        local ctype = card_type:lower()
-        local pool = Sim.CardFactory.get_consumable_pool(state, ctype, showman)
-        if #pool == 0 then return nil end
-
-        local cid
-        if force_key then
-            local def = Sim.CONSUMABLE_DEFS[force_key]
-            cid = def and def.id or Sim.RNG.pick(rng, pool)
-        else
-            cid = Sim.RNG.pick(rng, pool)
-        end
+        local def = Sim.CONSUMABLE_DEFS[center_key]
+        if not def then return nil end
 
         state._uid_n = (state._uid_n or 0) + 1
-        return { id = cid, uid = state._uid_n, _new = true }
+        return { id = def.id, uid = state._uid_n, _new = true }
 
     elseif card_type == "Playing Card" then
         local roll = Sim.RNG.pick(rng, Sim.PLAYING_CARD_POOL)
-        local rank = roll.rank
-        local suit = roll.suit
         state._uid_n = (state._uid_n or 0) + 1
-        return Sim.Card.new(rank, suit, 0, 0, 0, state._uid_n)
+        return Sim.Card.new(roll.rank, roll.suit, 0, 0, 0, state._uid_n)
+
+    elseif card_type == "Voucher" then
+        local def = Sim.Voucher.DEFS[center_key]
+        if not def then return nil end
+        return { key = center_key, _new = true }
     end
 
     return nil
 end
 
---- Check if the player has a specific joker by key.
-function Sim.CardFactory.has_joker(state, key)
-    local def = Sim.JOKER_DEFS[key]
-    if not def then return false end
-    for _, jk in ipairs(state.jokers) do
-        if jk.id == def.id then return true end
-    end
-    return false
-end
+-- ========================================================================= --
+-- UTILITY FUNCTIONS
+-- ========================================================================= --
 
---- Check if the player has a specific voucher.
-function Sim.CardFactory.has_voucher(state, key)
-    return state.vouchers and state.vouchers[key] == true
-end
-
---- Count cards in deck with a given enhancement.
 function Sim.CardFactory.count_enhancement(state, enhancement)
     local count = 0
     for _, c in ipairs(state.deck) do
@@ -316,7 +449,6 @@ function Sim.CardFactory.count_enhancement(state, enhancement)
     return count
 end
 
---- Count cards in deck with a given suit.
 function Sim.CardFactory.count_suit(state, suit)
     local count = 0
     for _, c in ipairs(state.deck) do
